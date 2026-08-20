@@ -8,7 +8,7 @@ schema_version = 1
 stage = "bootstrap"
 
 project_name = "administrateme-v3"
-owner = "@OWNER"              # your GitHub username, with the @
+owner = "@junglecrunch1212"              # your GitHub username, with the @
 
 # ---------------------------------------------------------------------------
 # Which model does which job. Both vendor families ship; these flags pick.

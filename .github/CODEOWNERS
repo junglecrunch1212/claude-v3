@@ -1,0 +1,29 @@
+# Everything the loop is forbidden to merge on its own also needs a human
+# review on the pull request. These are the same paths as
+# `harness.toml [autonomy] blocked_paths` — kept in step with it deliberately.
+#
+# CODEOWNERS assigns the review. The lane classifier is what actually stops the
+# merge. Neither replaces the other: one is a request, one is a gate.
+
+# The loop must not rewrite the loop.
+/.github/                 @junglecrunch1212
+
+# The control surface and its enforcement.
+/harness.toml             @junglecrunch1212
+/scripts/                 @junglecrunch1212
+
+# The only gate the pipeline has lives in the `ci` script, and a new
+# dependency is a supply-chain decision.
+/package.json             @junglecrunch1212
+/package-lock.json        @junglecrunch1212
+
+# A shipped migration has already run against rows that mean something.
+/db/migrations/           @junglecrunch1212
+
+# Reserved. If authorization is ever added, it is born blocked.
+/kernel/auth/             @junglecrunch1212
+
+# The source of truth and the invariants it declares.
+/docs/ARCHITECTURE.md     @junglecrunch1212
+/docs/SCHEMA.sql          @junglecrunch1212
+/tests/invariants/        @junglecrunch1212

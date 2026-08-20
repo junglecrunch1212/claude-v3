@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: How the loop behaves
+    url: https://github.com/junglecrunch1212/claude-v3/blob/main/docs/AUTONOMY-LANES.md
+    about: What merges without you, what stops and waits, and why.
+  - name: Something is behaving oddly
+    url: https://github.com/junglecrunch1212/claude-v3/blob/main/docs/TROUBLESHOOTING.md
+    about: Start here. The kill switch is the HARNESS_ENABLED variable.

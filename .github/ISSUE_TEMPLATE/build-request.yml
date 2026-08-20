@@ -1,0 +1,53 @@
+name: Build request
+description: One change for the pipeline to build, check, review and merge.
+title: "<one line, what you'll recognise later>"
+# Deliberately empty. `build` is the trigger and applying it is a decision:
+# you file the issue, read it back, then label it. The bootstrap creates the
+# label so it is there when you want it.
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        One change per issue. Three small issues cost less in total than one
+        bundled one, and each is reviewable.
+
+        Anything touching `db/migrations/`, `.github/`, `harness.toml`,
+        `scripts/`, `kernel/auth/` or `package.json` will stop and wait for you
+        no matter what — that is `docs/AUTONOMY-LANES.md` working, not a fault.
+  - type: textarea
+    id: asked
+    attributes:
+      label: What I asked for
+      description: In your own words. Screens and moments, not schemas.
+      placeholder: The triage card should show how many other items are waiting from this sender.
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: What should be true when this is done
+      description: Observable statements about the screen. Not implementation steps.
+      placeholder: |
+        - the triage card shows a count when the same sender has other waiting items
+        - the count is zero-suppressed — nothing is shown when there are none
+    validations:
+      required: true
+  - type: input
+    id: where
+    attributes:
+      label: Where
+      description: The screen or route this affects.
+      placeholder: /triage
+    validations:
+      required: true
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: Out of scope
+      description: The adjacent things not to touch.
+      placeholder: |
+        - the rules screen
+        - the disposition buttons themselves
+    validations:
+      required: false

@@ -1,0 +1,489 @@
+# The autonomous part. One issue labelled `build` → one branch → one pull
+# request, implemented, checked, reviewed, repaired, gated, merged, released.
+#
+# Everything is steps inside ONE run on purpose. claude-code-action commits as a
+# GitHub App, and App commits re-trigger workflows: split these stages into
+# separate event-triggered workflows and you have built a loop that pays for
+# itself until someone notices.
+name: pipeline
+
+on:
+  issues:
+    types: [labeled]
+
+# Two runs against one issue would race for the same branch.
+concurrency:
+  group: pipeline-issue-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  actions: write
+
+jobs:
+  build:
+    # `build` is the only trigger there is, and HARNESS_ENABLED is the kill
+    # switch: a repository VARIABLE, not a secret, so turning it off is one
+    # click and takes effect within seconds.
+    if: >-
+      github.event.label.name == 'build' &&
+      vars.HARNESS_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    env:
+      # A fine-grained PAT in HARNESS_PAT makes pipeline-opened PRs trigger the
+      # independent `checks` run. Without it GITHUB_TOKEN is used, and the same
+      # `npm run ci` still runs inside this job — see docs/SETUP-CHECKLIST.md.
+      GH_TOKEN: ${{ secrets.HARNESS_PAT || secrets.GITHUB_TOKEN }}
+      ISSUE_NUMBER: ${{ github.event.issue.number }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Read harness.toml
+        id: cfg
+        run: node scripts/harness-config.mjs
+
+      # ------------------------------------------------------------------
+      # Three expected refusals. Each explains itself on the issue and exits
+      # non-zero, and each sets handled=true so the failure handler at the
+      # bottom does not report it a second time as an unexplained crash.
+      # ------------------------------------------------------------------
+      - name: Stage gate
+        id: stage
+        if: steps.cfg.outputs.stage != 'operating'
+        env:
+          STAGE: ${{ steps.cfg.outputs.stage }}
+        run: |
+          echo "handled=true" >> "$GITHUB_OUTPUT"
+          cat > /tmp/body.md <<EOF
+          The pipeline will not run: \`stage\` in \`harness.toml\` is **$STAGE**, and the loop opens at **operating**.
+
+          That is the stage gate working, not a fault. An issue-driven loop against a repo with no invariant tests and no zeroed connection is a machine for producing confident nonsense.
+
+          Finish P1–P5 in \`BUILD-PROMPTS.md\`. P5 sets \`stage = "operating"\` once your first connection has been zeroed once, and that is what opens this.
+
+          The \`build\` label has been removed. Re-apply it when the stage is right.
+          EOF
+          gh issue comment "$ISSUE_NUMBER" --body-file /tmp/body.md
+          gh issue edit "$ISSUE_NUMBER" --remove-label build
+          exit 1
+
+      - name: Backpressure and the daily ceiling
+        id: quota
+        env:
+          MAX_OPEN: ${{ steps.cfg.outputs.max_open_agent_prs }}
+          MAX_PER_DAY: ${{ steps.cfg.outputs.max_prs_per_day }}
+        run: |
+          open_prs=$(gh pr list --label harness --state open --json number --jq 'length')
+          today=$(date -u +%Y-%m-%d)
+          today_prs=$(gh pr list --label harness --state all --limit 100 \
+            --search "created:>=$today" --json number --jq 'length')
+          echo "open agent PRs: $open_prs (max $MAX_OPEN) · opened today: $today_prs (max $MAX_PER_DAY)"
+
+          if [ "$open_prs" -ge "$MAX_OPEN" ]; then
+            echo "handled=true" >> "$GITHUB_OUTPUT"
+            cat > /tmp/body.md <<EOF
+          Waiting: there are already **$open_prs** open pipeline pull requests and \`autonomy.max_open_agent_prs\` is **$MAX_OPEN**.
+
+          This is backpressure, not a failure. Merge or close one, then re-apply the \`build\` label.
+          EOF
+            gh issue comment "$ISSUE_NUMBER" --body-file /tmp/body.md
+            gh issue edit "$ISSUE_NUMBER" --remove-label build
+            exit 1
+          fi
+
+          if [ "$today_prs" -ge "$MAX_PER_DAY" ]; then
+            echo "handled=true" >> "$GITHUB_OUTPUT"
+            cat > /tmp/body.md <<EOF
+          Stopped: **$today_prs** pipeline pull requests have been opened today and \`limits.max_prs_per_day\` is **$MAX_PER_DAY**. The ceiling resets at UTC midnight.
+          EOF
+            gh issue comment "$ISSUE_NUMBER" --body-file /tmp/body.md
+            gh issue edit "$ISSUE_NUMBER" --remove-label build
+            exit 1
+          fi
+
+      - name: Application present?
+        id: probe
+        env:
+          APP_DIR: ${{ steps.cfg.outputs.app_dir }}
+        run: |
+          if [ -f package.json ] && [ -f package-lock.json ] && [ -d "$APP_DIR" ]; then
+            echo "app=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "app=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=pipeline::No application scaffolded yet — npm run ci will report SKIP inside every review round."
+          fi
+
+      # The request, on disk, so the implementer and the reviewer read the same
+      # words. Written from env: issue text is user-controlled and must never be
+      # interpolated into a run body.
+      - name: Write .harness/request.json
+        env:
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          ISSUE_LABELS: ${{ toJSON(github.event.issue.labels.*.name) }}
+          ISSUE_URL: ${{ github.event.issue.html_url }}
+        run: |
+          mkdir -p .harness
+          node -e '
+            const fs = require("node:fs");
+            fs.writeFileSync(".harness/request.json", JSON.stringify({
+              number: Number(process.env.ISSUE_NUMBER),
+              title: process.env.ISSUE_TITLE ?? "",
+              body: process.env.ISSUE_BODY ?? "",
+              labels: JSON.parse(process.env.ISSUE_LABELS || "[]"),
+              url: process.env.ISSUE_URL ?? "",
+            }, null, 2) + "\n");
+          '
+          cat .harness/request.json
+
+      - name: Branch
+        id: branch
+        run: |
+          branch="agent/issue-${ISSUE_NUMBER}"
+          git config user.name  "administrateme-harness"
+          git config user.email "harness@users.noreply.github.com"
+          git checkout -b "$branch"
+          echo "name=$branch" >> "$GITHUB_OUTPUT"
+
+      - name: Implement (claude)
+        if: steps.cfg.outputs.implementer == 'claude'
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          claude_args: --max-turns ${{ steps.cfg.outputs.max_turns_implement }} --allowedTools "Read,Edit,Write,Glob,Grep,Bash"
+          prompt: |
+            You are the implementer described in playbooks/05-implement-change.md.
+            Read .harness/request.json first, then AGENTS.md, harness.toml and
+            docs/ARCHITECTURE.md. Architecture is the source of truth and the
+            vocabulary.
+
+            Nobody will answer a question — there is no human in this turn, so a
+            question is a failure. If you genuinely cannot proceed, write why to
+            .harness/blocked.md and change nothing else.
+
+            Make the smallest change that satisfies the request, and write or
+            update a test that fails before it and passes after. Run `npm run ci`
+            yourself and fix what you broke.
+
+            Do not commit or push; the workflow commits after you. Do not edit
+            .github/, scripts/, harness.toml, package.json, package-lock.json or
+            anything under db/migrations/ — those edits are reverted before the
+            commit, so turns spent there are lost.
+
+      # Unverified: the pinned action and its input names have never been run
+      # here. Worth one throwaway run before you switch implementer to "codex".
+      - name: Implement (codex)
+        if: steps.cfg.outputs.implementer == 'codex'
+        uses: openai/codex-action@main
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          prompt: |
+            You are the implementer described in playbooks/05-implement-change.md.
+            Read .harness/request.json, AGENTS.md, harness.toml and
+            docs/ARCHITECTURE.md, then make the smallest change that satisfies
+            the request with a test that fails before it and passes after. Do
+            not commit or push. If you cannot proceed, write .harness/blocked.md
+            and change nothing else.
+
+      - name: Revert any edit to a blocked path
+        run: |
+          node .github/actions/review-round/blocked-paths.mjs > /tmp/blocked.txt || true
+          if [ -s /tmp/blocked.txt ]; then
+            echo "::warning title=blocked paths::The implementer edited protected paths. Reverting them."
+            while IFS= read -r p; do
+              [ -z "$p" ] && continue
+              echo "  reverting $p"
+              if git cat-file -e "HEAD:$p" 2>/dev/null; then
+                git checkout HEAD -- "$p" || true
+              else
+                rm -f "$p" || true
+              fi
+            done < /tmp/blocked.txt
+          fi
+
+      - name: Commit and push
+        id: commit
+        run: |
+          git add -A
+          if git diff --cached --quiet; then
+            echo "handled=true" >> "$GITHUB_OUTPUT"
+            {
+              echo "Nothing was written, so there is no pull request to open."
+              echo
+              if [ -f .harness/blocked.md ]; then
+                echo "The implementer stopped deliberately and left this:"
+                echo
+                echo '```'
+                cat .harness/blocked.md
+                echo '```'
+              else
+                echo "It produced no change and no explanation. That usually means the request was too vague to act on — \`playbooks/10-file-a-change.md\` has the shape that avoids this."
+              fi
+              echo
+              echo "Run: $RUN_URL"
+            } > /tmp/body.md
+            gh issue comment "$ISSUE_NUMBER" --body-file /tmp/body.md
+            gh issue edit "$ISSUE_NUMBER" --add-label needs-human --remove-label build
+            exit 1
+          fi
+          git commit -m "build: issue #${ISSUE_NUMBER}"
+          git push -u origin "${{ steps.branch.outputs.name }}"
+
+      - name: Open the pull request
+        id: pr
+        env:
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          BRANCH: ${{ steps.branch.outputs.name }}
+        run: |
+          {
+            echo "Closes #${ISSUE_NUMBER}"
+            echo
+            echo "Opened by the pipeline. Review, check, repair and the lane decision all happen in [this run]($RUN_URL) and are reported here when they finish."
+            echo
+            echo "Screenshots, if the app is scaffolded, are the \`screenshots-*\` artifact on that run."
+          } > /tmp/pr-body.md
+          gh pr create \
+            --base main \
+            --head "$BRANCH" \
+            --title "$ISSUE_TITLE" \
+            --body-file /tmp/pr-body.md \
+            --label harness
+          number=$(gh pr view "$BRANCH" --json number --jq .number)
+          echo "number=$number" >> "$GITHUB_OUTPUT"
+
+      - name: Install
+        if: steps.probe.outputs.app == 'true'
+        run: npm ci
+
+      - name: Install Playwright browsers
+        if: steps.probe.outputs.app == 'true'
+        run: npx playwright install --with-deps chromium
+
+      # ------------------------------------------------------------------
+      # Two repair rounds are wired; `autonomy.max_repair_attempts` decides how
+      # many are used, and the self-check refuses a value above the number
+      # wired. Round 3 judges the last repair and cannot itself repair —
+      # without it the final fix would merge unjudged.
+      # ------------------------------------------------------------------
+      - name: Round 1 — review, repair
+        id: round1
+        uses: ./.github/actions/review-round
+        with:
+          round: "1"
+          repair: ${{ fromJSON(steps.cfg.outputs.max_repair_attempts) >= 1 }}
+          reviewer: ${{ steps.cfg.outputs.reviewer }}
+          repairer: ${{ steps.cfg.outputs.repairer }}
+          max_turns_review: ${{ steps.cfg.outputs.max_turns_review }}
+          max_turns_repair: ${{ steps.cfg.outputs.max_turns_repair }}
+          app_present: ${{ steps.probe.outputs.app }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          openai_api_key: ${{ secrets.OPENAI_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Round 2 — review, repair
+        id: round2
+        if: >-
+          steps.round1.outputs.verdict == 'fail' &&
+          fromJSON(steps.cfg.outputs.max_repair_attempts) >= 2
+        uses: ./.github/actions/review-round
+        with:
+          round: "2"
+          repair: ${{ fromJSON(steps.cfg.outputs.max_repair_attempts) >= 2 }}
+          reviewer: ${{ steps.cfg.outputs.reviewer }}
+          repairer: ${{ steps.cfg.outputs.repairer }}
+          max_turns_review: ${{ steps.cfg.outputs.max_turns_review }}
+          max_turns_repair: ${{ steps.cfg.outputs.max_turns_repair }}
+          app_present: ${{ steps.probe.outputs.app }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          openai_api_key: ${{ secrets.OPENAI_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Round 3 — verdict only, judging the last repair
+        id: round3
+        if: >-
+          steps.round1.outputs.verdict == 'fail' &&
+          fromJSON(steps.cfg.outputs.max_repair_attempts) >= 1
+        uses: ./.github/actions/review-round
+        with:
+          round: "3"
+          repair: "false"
+          reviewer: ${{ steps.cfg.outputs.reviewer }}
+          repairer: ${{ steps.cfg.outputs.repairer }}
+          max_turns_review: ${{ steps.cfg.outputs.max_turns_review }}
+          max_turns_repair: ${{ steps.cfg.outputs.max_turns_repair }}
+          app_present: ${{ steps.probe.outputs.app }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          openai_api_key: ${{ secrets.OPENAI_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Final verdict
+        id: verdict
+        env:
+          V1: ${{ steps.round1.outputs.verdict }}
+          V2: ${{ steps.round2.outputs.verdict }}
+          V3: ${{ steps.round3.outputs.verdict }}
+          C1: ${{ steps.round1.outputs.check_status }}
+          C2: ${{ steps.round2.outputs.check_status }}
+          C3: ${{ steps.round3.outputs.check_status }}
+          S1: ${{ steps.round1.outputs.summary }}
+          S2: ${{ steps.round2.outputs.summary }}
+          S3: ${{ steps.round3.outputs.summary }}
+        run: |
+          # The last round that actually ran is the one that judged the code as
+          # it now stands.
+          verdict="$V1"; checks="$C1"; summary="$S1"
+          if [ -n "$V2" ]; then verdict="$V2"; checks="$C2"; summary="$S2"; fi
+          if [ -n "$V3" ]; then verdict="$V3"; checks="$C3"; summary="$S3"; fi
+          echo "verdict=$verdict"       >> "$GITHUB_OUTPUT"
+          echo "check_status=$checks"   >> "$GITHUB_OUTPUT"
+          echo "summary=$summary"       >> "$GITHUB_OUTPUT"
+          echo "verdict: $verdict · checks: $checks"
+
+      # Deterministic, and deliberately not a model judgement: "may this merge
+      # itself" is exactly the question a model can be argued out of by the diff
+      # it is reading.
+      - name: Classify the lane
+        id: lane
+        run: |
+          git fetch origin main --depth=1 || git fetch origin main
+          git diff --name-only origin/main...HEAD > /tmp/changed.txt
+          echo "changed paths:"; cat /tmp/changed.txt
+          node scripts/lane-classify.mjs /tmp/changed.txt
+
+      - name: Merge, or stop and ask
+        id: gate
+        env:
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          VERDICT: ${{ steps.verdict.outputs.verdict }}
+          CHECKS: ${{ steps.verdict.outputs.check_status }}
+          SUMMARY: ${{ steps.verdict.outputs.summary }}
+          LANE: ${{ steps.lane.outputs.lane }}
+          LANE_REASON: ${{ steps.lane.outputs.reason }}
+          BLOCKING_PATHS: ${{ steps.lane.outputs.blocking_paths }}
+          MODE: ${{ steps.cfg.outputs.autonomy_mode }}
+          OWNER_HANDLE: ${{ steps.cfg.outputs.owner }}
+        run: |
+          if [ "$VERDICT" = "pass" ] && [ "$CHECKS" != "fail" ] && [ "$LANE" = "open" ]; then
+            {
+              echo "Merging. Review verdict **pass**, deterministic checks **$CHECKS**, lane **open** — $LANE_REASON."
+              echo
+              echo "$SUMMARY"
+            } > /tmp/body.md
+            gh pr comment "$PR_NUMBER" --body-file /tmp/body.md
+            gh pr merge "$PR_NUMBER" --squash --delete-branch
+            echo "merged=true" >> "$GITHUB_OUTPUT"
+
+            {
+              echo "Built and merged. [Run]($RUN_URL) · PR #$PR_NUMBER."
+              echo
+              echo "Pull it on the mini when you want it:"
+              echo
+              echo '```'
+              echo "git pull && npm ci && npm run build && npm run start"
+              echo '```'
+            } > /tmp/issue-body.md
+            gh issue comment "$ISSUE_NUMBER" --body-file /tmp/issue-body.md
+          else
+            echo "merged=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "Stopped and waiting for you."
+              echo
+              echo "| | |"
+              echo "|---|---|"
+              echo "| review verdict | \`$VERDICT\` |"
+              echo "| deterministic checks | \`$CHECKS\` |"
+              echo "| lane | \`$LANE\` — $LANE_REASON |"
+              echo "| autonomy mode | \`$MODE\` |"
+              echo
+              if [ -n "$BLOCKING_PATHS" ]; then
+                echo "Protected paths in this change: \`$BLOCKING_PATHS\`. See \`docs/AUTONOMY-LANES.md\` for why each one is on the list."
+                echo
+              fi
+              if [ -n "$SUMMARY" ]; then
+                echo "Reviewer: $SUMMARY"
+                echo
+              fi
+              echo "Nothing is lost. The branch is pushed, the code is written, the review already ran. Click merge, or don't."
+              echo
+              echo "Run: $RUN_URL"
+            } > /tmp/body.md
+            gh pr comment "$PR_NUMBER" --body-file /tmp/body.md
+            gh pr edit "$PR_NUMBER" --add-label needs-human
+            gh pr edit "$PR_NUMBER" --add-reviewer "${OWNER_HANDLE#@}" || true
+            {
+              echo "Stopped for you: PR #$PR_NUMBER is labelled \`needs-human\` — $LANE_REASON."
+              echo
+              echo "Run: $RUN_URL"
+            } > /tmp/issue-body.md
+            gh issue comment "$ISSUE_NUMBER" --body-file /tmp/issue-body.md
+            gh issue edit "$ISSUE_NUMBER" --remove-label build || true
+          fi
+
+      # A merge made with GITHUB_TOKEN raises no `push` event, so the release
+      # is dispatched explicitly rather than waited for.
+      - name: Cut the release
+        if: steps.gate.outputs.merged == 'true'
+        env:
+          VERDICT: ${{ steps.verdict.outputs.verdict }}
+          CHECKS: ${{ steps.verdict.outputs.check_status }}
+          LANE: ${{ steps.lane.outputs.lane }}
+        run: |
+          gh workflow run 50-release.yml \
+            --ref main \
+            -f verdict="$VERDICT" \
+            -f lane="$LANE" \
+            -f check_status="$CHECKS" \
+            -f run_url="$RUN_URL" \
+            -f issue="$ISSUE_NUMBER"
+
+      # C18: the pipeline uploads its own, because `checks` does not fire on a
+      # PR opened with GITHUB_TOKEN and five documents promised these exist.
+      - name: Upload screenshots
+        if: always() && steps.probe.outputs.app == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-${{ github.run_id }}
+          path: |
+            test-results/
+            playwright-report/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      # Only genuinely unexplained failures reach this. The stage gate, the
+      # quota check and "nothing was written" each explain themselves and set
+      # handled=true, and reporting those a second time as a crash is how the
+      # very first thing SETUP-CHECKLIST.md asks you to try looks broken.
+      - name: Unexplained failure
+        if: >-
+          failure() &&
+          steps.stage.outputs.handled != 'true' &&
+          steps.quota.outputs.handled != 'true' &&
+          steps.commit.outputs.handled != 'true'
+        run: |
+          {
+            echo "The pipeline stopped with an error, and it was not one of the refusals it knows how to explain."
+            echo
+            echo "Read the run: $RUN_URL"
+            echo
+            echo "\`docs/TROUBLESHOOTING.md\` covers the common ones — a missing key, the Claude GitHub App not installed on this repo, or workflow permissions that are not read/write."
+          } > /tmp/body.md
+          gh issue comment "$ISSUE_NUMBER" --body-file /tmp/body.md
+          gh issue edit "$ISSUE_NUMBER" --add-label needs-human --remove-label build || true

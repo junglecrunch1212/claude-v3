@@ -1,0 +1,36 @@
+# Runtime — the mini's data never leaves the mini
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+data/
+
+# Machine secrets. `**/.env*` is also a blocked path in harness.toml — the
+# runtime model key lives here, and the Actions secrets are a different thing.
+.env
+.env.*
+!.env.example
+
+# Dependencies and build output
+node_modules/
+dist/
+build/
+.vite/
+*.tsbuildinfo
+
+# Test output. Screenshots are uploaded as CI artifacts, never committed.
+playwright-report/
+test-results/
+blob-report/
+coverage/
+
+# Scratch written by the pipeline inside a run: request.json, verdict.json,
+# blocked.md, repair-note.md. The PR body carries what matters.
+.harness/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/

@@ -1,0 +1,141 @@
+# The whole deploy story: prove the build, then cut a release carrying the
+# evidence that let the change merge. There is no hosted target — the runtime is
+# Node + SQLite on the Mac mini behind Tailscale, and it moves when you pull.
+name: release
+
+on:
+  push:
+    branches: [main]
+  # The pipeline dispatches this after merging: a merge made with GITHUB_TOKEN
+  # raises no push event, and these inputs are the evidence the notes are for.
+  workflow_dispatch:
+    inputs:
+      verdict:
+        description: The review verdict that allowed the merge.
+        required: false
+        default: ""
+      lane:
+        description: The lane decision.
+        required: false
+        default: ""
+      check_status:
+        description: Deterministic check result.
+        required: false
+        default: ""
+      run_url:
+        description: The pipeline run that produced it.
+        required: false
+        default: ""
+      issue:
+        description: The issue this came from.
+        required: false
+        default: ""
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    # Same kill switch as the pipeline. Flip HARNESS_ENABLED to false and this
+    # refuses to start too; `checks` keeps running, which is what you want.
+    if: vars.HARNESS_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Read harness.toml
+        id: cfg
+        run: node scripts/harness-config.mjs
+
+      - name: Application present?
+        id: probe
+        env:
+          APP_DIR: ${{ steps.cfg.outputs.app_dir }}
+        run: |
+          if [ -f package.json ] && [ -f package-lock.json ] && [ -d "$APP_DIR" ]; then
+            echo "app=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "app=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=release::SKIP — nothing scaffolded yet. There is no build to prove and nothing to release until BUILD-PROMPTS.md P1."
+          fi
+
+      - name: Install
+        if: steps.probe.outputs.app == 'true'
+        run: npm ci
+
+      # A release whose build was never proven is a lie with a version number.
+      - name: Build
+        if: steps.probe.outputs.app == 'true'
+        run: npm run build
+
+      - name: Cut the release
+        if: steps.probe.outputs.app == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERDICT: ${{ inputs.verdict }}
+          LANE: ${{ inputs.lane }}
+          CHECK_STATUS: ${{ inputs.check_status }}
+          PIPELINE_RUN_URL: ${{ inputs.run_url }}
+          ISSUE: ${{ inputs.issue }}
+          DEPLOY_HOST: ${{ steps.cfg.outputs.deploy_target }}
+        run: |
+          sha_short=$(git rev-parse --short HEAD)
+          tag="v$(date -u +%Y.%m.%d)-${sha_short}"
+          lock_hash=$(sha256sum package-lock.json | cut -c1-16)
+          subject=$(git log -1 --pretty=%s)
+
+          # Written with if/fi rather than `[ -n "$X" ] && echo`: under `set -e`
+          # a false test on the last line of a block aborts the notes half
+          # written, and a half-written evidence bundle is worse than none.
+          {
+            echo "## $subject"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| commit | \`$(git rev-parse HEAD)\` |"
+            if [ -n "$VERDICT" ]; then
+              echo "| review verdict | \`$VERDICT\` |"
+            else
+              echo "| review verdict | merged by hand — no pipeline verdict |"
+            fi
+            if [ -n "$CHECK_STATUS" ]; then
+              echo "| deterministic checks | \`$CHECK_STATUS\` |"
+            fi
+            if [ -n "$LANE" ]; then
+              echo "| lane | \`$LANE\` |"
+            fi
+            echo "| package-lock.json | \`$lock_hash\` |"
+            if [ -n "$ISSUE" ]; then
+              echo "| issue | #$ISSUE |"
+            fi
+            if [ -n "$PIPELINE_RUN_URL" ]; then
+              echo "| pipeline run | $PIPELINE_RUN_URL |"
+              echo
+              echo "Screenshots are the \`screenshots-*\` artifact on that run. They are the visual review this project gets."
+            fi
+            echo
+            echo "### Deploy"
+            echo
+            echo "Target is \`$DEPLOY_HOST\` — nothing deploys on its own. On the mini:"
+            echo
+            echo '```'
+            echo "git pull && npm ci && npm run build && npm run start"
+            echo '```'
+          } > /tmp/notes.md
+
+          gh release create "$tag" \
+            --title "$tag" \
+            --notes-file /tmp/notes.md \
+            --target "$GITHUB_SHA"
