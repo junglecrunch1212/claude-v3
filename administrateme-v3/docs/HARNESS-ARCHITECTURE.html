@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AdministrateMe V3 — harness architecture</title>
+<style>
+:root{--bg:#fff;--ink:#18181b;--muted:#71717a;--faint:#a1a1aa;--rule:#d4d4d8;--box:#fff;
+--accent:#0f766e;--accent-bg:#f0fdfa;--warn:#b45309;--warn-bg:#fffbeb;--go:#047857;--go-bg:#ecfdf5;--halt:#be123c;--halt-bg:#fff1f2;}
+@media(prefers-color-scheme:dark){:root{--bg:#0b0b0d;--ink:#f4f4f5;--muted:#a1a1aa;--faint:#71717a;--rule:#3f3f46;--box:#1c1c20;
+--accent:#5eead4;--accent-bg:#0d2b28;--warn:#fbbf24;--warn-bg:#2a2010;--go:#34d399;--go-bg:#0f2a20;--halt:#fb7185;--halt-bg:#2a1218;}}
+*{box-sizing:border-box}html,body{margin:0;background:var(--bg)}
+body{font:15px/1.6 ui-sans-serif,-apple-system,"Segoe UI",Inter,system-ui,sans-serif;color:var(--ink);padding:32px 20px 64px}
+main{max-width:1180px;margin:0 auto}
+h1{font-size:22px;letter-spacing:-.01em;margin:0 0 4px;font-weight:650}
+h2{font-size:15px;margin:34px 0 10px;font-weight:650}
+.sub{color:var(--muted);margin:0 0 28px}
+svg{width:100%;height:auto;display:block}
+p{margin:0 0 12px;max-width:74ch}
+.legend{display:flex;flex-wrap:wrap;gap:8px 26px;margin-top:22px;padding-top:16px;border-top:1px solid var(--rule);font-size:13.5px;color:var(--muted)}
+.legend b{color:var(--ink);font-weight:600}
+.sw{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:7px;vertical-align:-1px}
+table{border-collapse:collapse;width:100%;font-size:14px;margin:6px 0 4px}
+th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--rule);vertical-align:top}
+th{font-weight:650;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+code{font:12.5px ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--accent-bg);color:var(--accent);padding:1px 5px;border-radius:4px}
+</style></head><body><main>
+
+<h1>AdministrateMe V3 — harness architecture</h1>
+<p class="sub">Two machines. The chat agent runs while you are talking to it; GitHub Actions runs when you are not. Keeping them separate is the entire design.</p>
+
+<svg viewBox="0 0 1180 720" role="img" aria-describedby="d">
+<desc id="d">Phase one: build prompts P0 through P6 run in a chat project, each producing a pull request you merge by hand. Phase two: you describe a change in chat, the agent files a build-labelled issue, and one GitHub Actions run implements it, runs deterministic checks, has a model review it, repairs once, classifies the change by blast radius, and either merges and releases or stops for you. There is no hosted deploy; releases are pulled to the Mac mini by hand.</desc>
+<style>
+.lbl{font:600 13px ui-sans-serif,system-ui,sans-serif;fill:var(--ink)}
+.bd{font:12.5px ui-sans-serif,system-ui,sans-serif;fill:var(--muted)}
+.tn{font:11px ui-sans-serif,system-ui,sans-serif;fill:var(--faint)}
+.hd{font:650 11.5px ui-sans-serif,system-ui,sans-serif;fill:var(--faint);letter-spacing:.1em}
+.box{fill:var(--box);stroke:var(--rule);stroke-width:1;rx:8}
+.ln{stroke:var(--muted);stroke-width:1.4;fill:none}
+.lng{stroke:var(--go);stroke-width:1.6;fill:none}
+.lnh{stroke:var(--halt);stroke-width:1.6;fill:none}
+.dsh{stroke-dasharray:4 4}
+.mono{font:11.5px ui-monospace,Menlo,monospace;fill:var(--muted)}
+</style>
+<defs>
+<marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="var(--muted)"/></marker>
+<marker id="ag" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="var(--go)"/></marker>
+<marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="var(--halt)"/></marker>
+</defs>
+
+<!-- PHASE 1 -->
+<text x="20" y="24" class="hd">PHASE 1 — YOU PASTE SEVEN PROMPTS, ONE AT A TIME, AND MERGE EACH PR BY HAND</text>
+<rect x="20" y="36" width="1140" height="96" class="box"/>
+<g class="mono" text-anchor="middle">
+<rect x="36" y="52" width="150" height="34" class="box"/><text x="111" y="74">P0 harness</text>
+<rect x="196" y="52" width="150" height="34" class="box"/><text x="271" y="74">P1 machine</text>
+<rect x="356" y="52" width="150" height="34" class="box"/><text x="431" y="74">P2 model call</text>
+<rect x="516" y="52" width="150" height="34" class="box" style="fill:var(--accent-bg);stroke:var(--accent)"/><text x="591" y="74" style="fill:var(--accent)">P3 rules</text>
+<rect x="676" y="52" width="150" height="34" class="box" style="fill:var(--accent-bg);stroke:var(--accent)"/><text x="751" y="74" style="fill:var(--accent)">P4 wizard</text>
+<rect x="836" y="52" width="150" height="34" class="box"/><text x="911" y="74">P5 connect</text>
+<rect x="996" y="52" width="148" height="34" class="box"/><text x="1070" y="74">P6 Plaid/Notes</text>
+</g>
+<text x="36" y="108" class="bd">No AI anywhere in P1 — you type the title and the date. If the model half never works you still have a working system.</text>
+<text x="36" y="124" class="bd" style="fill:var(--accent)">P3 and P4 are the product: they are the two entry points to the one rules table. P5 sets stage = "operating", which is what opens Phase 2.</text>
+
+<!-- PHASE 2 header -->
+<text x="20" y="176" class="hd">PHASE 2 — ONE SENTENCE IN, ONE RELEASE OUT. YOU DECIDE NOTHING IN BETWEEN</text>
+
+<!-- chat column -->
+<rect x="20" y="192" width="250" height="470" class="box" style="fill:var(--bg)"/>
+<text x="36" y="216" class="hd">CHAT AGENT — RUNS ONLY IN A TURN</text>
+<rect x="36" y="230" width="218" height="70" class="box"/>
+<text x="48" y="252" class="lbl">You, in plain language</text>
+<text x="48" y="270" class="bd">“Triage should group waiting</text>
+<text x="48" y="285" class="bd">items from the same sender.”</text>
+<path d="M145 300 V 330" class="ln" marker-end="url(#a)"/>
+<rect x="36" y="336" width="218" height="86" class="box"/>
+<text x="48" y="358" class="lbl">Translator</text>
+<text x="48" y="376" class="bd">Writes one issue: his words,</text>
+<text x="48" y="391" class="bd">what must be true, which</text>
+<text x="48" y="406" class="bd">screen, what is out of scope.</text>
+<rect x="36" y="434" width="218" height="52" class="box" style="fill:var(--go-bg);stroke:var(--go)"/>
+<text x="48" y="456" class="lbl" style="fill:var(--go)">Applies label `build`</text>
+<text x="48" y="474" class="tn">that label is the only trigger</text>
+<text x="36" y="520" class="bd">It cannot merge. It cannot</text>
+<text x="36" y="536" class="bd">release. When the turn ends</text>
+<text x="36" y="552" class="bd">there is no “it” to keep going —</text>
+<text x="36" y="568" class="bd">which is exactly why the</text>
+<text x="36" y="584" class="bd">autonomous half lives in</text>
+<text x="36" y="600" class="bd">Actions instead.</text>
+
+<path d="M270 460 H 300" class="lng" marker-end="url(#ag)"/>
+
+<!-- actions column -->
+<rect x="300" y="192" width="560" height="470" class="box" style="fill:var(--bg)"/>
+<text x="316" y="216" class="hd">GITHUB ACTIONS — ONE WORKFLOW RUN, START TO FINISH</text>
+
+<rect x="316" y="230" width="528" height="40" class="box"/>
+<text x="328" y="255" class="lbl">Gate: HARNESS_ENABLED · stage = operating · open-PR cap · daily PR cap</text>
+
+<path d="M580 270 V 292" class="ln" marker-end="url(#a)"/>
+<rect x="316" y="298" width="528" height="40" class="box"/>
+<text x="328" y="323" class="lbl">Implement — smallest change + a test that failed before it</text>
+
+<path d="M580 338 V 360" class="ln" marker-end="url(#a)"/>
+<rect x="316" y="366" width="528" height="52" class="box" style="fill:var(--go-bg);stroke:var(--go)"/>
+<text x="328" y="388" class="lbl" style="fill:var(--go)">npm run ci — the floor, and no model may argue with it</text>
+<text x="328" y="406" class="mono">types · lint · unit + invariants I-1…I-9 · build · Playwright</text>
+
+<path d="M580 418 V 440" class="ln" marker-end="url(#a)"/>
+<rect x="316" y="446" width="528" height="52" class="box"/>
+<text x="328" y="468" class="lbl">Review — read-only, separate context, verdict only</text>
+<text x="328" y="486" class="tn">red checks force `fail` · any P1 forces `fail` · it never fixes what it read</text>
+
+<path d="M580 498 V 520" class="ln" marker-end="url(#a)"/>
+<path d="M316 472 H 296 V 540 H 316" class="ln dsh"/>
+<text x="230" y="540" class="tn" text-anchor="start">one repair round,</text>
+<text x="230" y="554" class="tn" text-anchor="start">then a verdict</text>
+<rect x="316" y="526" width="528" height="46" class="box"/>
+<text x="328" y="548" class="lbl">Repair ×1 → verdict-only round</text>
+<text x="328" y="565" class="tn">rounds are unrolled in the YAML, not behind a counter — the cost is visible in the file</text>
+
+<path d="M580 572 V 594" class="ln" marker-end="url(#a)"/>
+<rect x="316" y="600" width="528" height="46" class="box" style="fill:var(--warn-bg);stroke:var(--warn)"/>
+<text x="328" y="622" class="lbl" style="fill:var(--warn)">Lane classifier — plain script, never a model</text>
+<text x="328" y="639" class="tn">“may this merge without a human” is a question a model can be argued out of by the diff it is reading</text>
+
+<!-- outcomes -->
+<path d="M860 623 H 890" class="lng" marker-end="url(#ag)"/>
+<rect x="890" y="196" width="270" height="200" class="box" style="fill:var(--halt-bg);stroke:var(--halt)"/>
+<text x="906" y="220" class="hd" style="fill:var(--halt)">BLOCKED LANE — STOPS, ALWAYS</text>
+<text x="906" y="244" class="mono">db/migrations/**</text>
+<text x="906" y="264" class="mono">.github/**</text>
+<text x="906" y="284" class="mono">harness.toml · scripts/**</text>
+<text x="906" y="304" class="mono">package.json · lockfile</text>
+<text x="906" y="324" class="mono">kernel/auth/** · *.auth.ts</text>
+<text x="906" y="344" class="mono">*secret* · *credential* · .env*</text>
+<text x="906" y="368" class="tn">labels `needs-human`, names the rule,</text>
+<text x="906" y="383" class="tn">and stops. Nothing is lost.</text>
+
+<rect x="890" y="412" width="270" height="250" class="box" style="fill:var(--go-bg);stroke:var(--go)"/>
+<text x="906" y="436" class="hd" style="fill:var(--go)">OPEN LANE</text>
+<text x="906" y="462" class="lbl" style="fill:var(--go)">squash merge</text>
+<path d="M1025 472 V 496" class="lng" marker-end="url(#ag)"/>
+<text x="906" y="516" class="lbl" style="fill:var(--go)">50-release.yml</text>
+<text x="906" y="536" class="bd">a GitHub release carrying the</text>
+<text x="906" y="552" class="bd">commit, verdict, lane decision,</text>
+<text x="906" y="568" class="bd">lockfile hash, pull instructions</text>
+<path d="M1025 578 V 602" class="ln dsh" marker-end="url(#a)"/>
+<text x="906" y="622" class="lbl">you pull to the Mac mini</text>
+<text x="906" y="640" class="tn">by hand, when you want it —</text>
+<text x="906" y="654" class="tn">nothing pushes onto that box</text>
+
+<line x1="20" y1="686" x2="1160" y2="686" stroke="var(--rule)"/>
+<text x="20" y="708" class="bd">Model calls per issue: <tspan class="lbl">2 best case, 4 worst</tspan>. Kill switch: repo variable <tspan class="lbl">HARNESS_ENABLED=false</tspan>. Visual review: Playwright screenshots uploaded on <tspan class="lbl">always()</tspan> — there is no hosted preview and no Pages.</text>
+</svg>
+
+<div class="legend">
+<span><i class="sw" style="background:var(--go)"></i><b>Deterministic</b> — no model can override it</span>
+<span><i class="sw" style="background:var(--warn)"></i><b>Plain code</b> — classification, never judgement</span>
+<span><i class="sw" style="background:var(--halt)"></i><b>Stops for you</b> — hard to reverse</span>
+<span><i class="sw" style="background:var(--accent)"></i><b>The product</b> — rules and the wizard</span>
+</div>
+
+<h2>Why the whole loop is one workflow run</h2>
+<p>The obvious build is separate workflows triggering each other: the implementer pushes, the push triggers the reviewer, the reviewer's comment triggers the repairer. Don't. <code>claude-code-action</code> authenticates as a GitHub App, so its commits <em>do</em> re-trigger workflows — the property that would make the chain work is the same one that runs it all night and produces a bill instead of a feature.</p>
+<p>So the sequence is ordinary sequential steps inside one run. There is nothing to re-trigger. The repair budget is one round because one <code>repair: "true"</code> block is written into the file — not because a counter says 1. Raising it means editing YAML, which is the point: making an agent loop longer should be a deliberate act, not a number you nudge at midnight. Side benefit you will appreciate the first time something breaks — the whole thing is one log you read top to bottom.</p>
+
+<h2>Why lanes are drawn by blast radius, not confidence</h2>
+<p>A confidence threshold sorts on the one input the thing being judged can influence. Sort by how expensive the mistake is to undo instead.</p>
+<table>
+<tr><th>Lane</th><th>Example</th><th>Cost of one bad merge</th><th>Policy</th></tr>
+<tr><td>Reversible, contained</td><td>a component, a style, a test</td><td>one revert</td><td>merges itself</td></tr>
+<tr><td>Reversible, wide</td><td>a policy matcher, an adapter</td><td>a revert plus a re-run</td><td>merges at <code>wide</code>, stops at <code>narrow</code></td></tr>
+<tr><td>Hard to reverse</td><td>migrations, auth, workflows, manifests</td><td>you cannot cleanly undo it</td><td>never merges itself, at any mode</td></tr>
+</table>
+<p><code>package.json</code> is on the blocked list for a reason worth knowing: it holds the <code>ci</code> script, which is the pipeline's only gate. An agent able to edit that file can rewrite <code>"ci"</code> to <code>"true"</code> and every check passes forever, silently. Same for <code>.github/</code>. <b>An agent that can rewrite its own guardrails does not have guardrails</b> — and the failure is invisible, because everything stays green.</p>
+
+<h2>What it has not done</h2>
+<p>Run against a live repository. Three adversarial passes found 29 defects in these files first, four of which would have broken the first run outright — a shell-injection hole via issue title, missing browser binaries that would have failed every round forever, a git check blind to newly-added files, and a guard that cleaned the tree before checking it. Those are fixed; that is also the base rate. Run your first pipeline PR at <code>mode = "shadow"</code>, where the full loop executes and merges nothing.</p>
+
+</main></body></html>

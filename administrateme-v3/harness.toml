@@ -1,0 +1,74 @@
+# AdministrateMe V3 — the only control surface.
+# Every workflow reads this. Change behaviour here, not in the YAML.
+
+schema_version = 1
+
+# bootstrap -> scaffolded -> operating
+# The pipeline refuses to run before `operating`.
+stage = "bootstrap"
+
+project_name = "administrateme-v3"
+owner = "@OWNER"              # your GitHub username, with the @
+
+# ---------------------------------------------------------------------------
+# Which model does which job. Both vendor families ship; these flags pick.
+#   "claude" -> anthropics/claude-code-action   (ANTHROPIC_API_KEY or OAuth)
+#   "codex"  -> openai/codex-action             (OPENAI_API_KEY)
+#   "off"    -> that stage is skipped
+# ---------------------------------------------------------------------------
+[agents]
+implementer = "claude"
+reviewer    = "claude"
+repairer    = "claude"
+
+# ---------------------------------------------------------------------------
+# How much merges without you.
+#   shadow  full loop runs, merges nothing
+#   narrow  frontend files only
+#   wide    everything except the blocked paths
+# ---------------------------------------------------------------------------
+[autonomy]
+mode = "wide"
+max_repair_attempts = 1       # one review, one repair, then a verdict round
+max_open_agent_prs  = 2
+
+# Paths that ALWAYS stop and ask you. Short on purpose — this is a household
+# tool with seven tables, not a platform.
+blocked_paths = [
+  "**/migrations/**",         # schema changes are the one thing you can't revert
+  "kernel/auth/**",           # reserved; if auth ever exists it is born blocked
+  "**/*.auth.ts",             # the same rule by filename, wherever it lands
+  ".github/**",               # the loop must not rewrite the loop
+  "harness.toml",
+  "scripts/**",
+  "**/package.json",          # holds `ci` — the pipeline's only gate
+  "**/package-lock.json",
+  "**/.env*",
+  "**/*secret*",
+  "**/*credential*",
+]
+
+[limits]
+max_turns_implement = 30
+max_turns_review    = 15
+max_turns_repair    = 15
+max_prs_per_day     = 30
+
+# ---------------------------------------------------------------------------
+# Runtime. There is no cloud deploy: the app runs on your Mac mini behind
+# Tailscale, against a local SQLite file that never leaves that machine.
+# CI proves the build and uploads screenshots; you pull when you want it.
+# ---------------------------------------------------------------------------
+[deploy]
+target = "local"
+host   = "coss-mac-mini"
+
+[stack]
+language = "typescript"
+runtime  = "node-22"
+server   = "express"
+db       = "sqlite"
+ui       = "react-vite-tailwind"
+app_dir  = "app"              # read by the app-exists probe in 00-checks.yml
+                              # and 50-release.yml via harness-config.mjs. P1
+                              # must scaffold to this exact name.

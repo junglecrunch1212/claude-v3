@@ -1,0 +1,431 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AdministrateMe V3 — connect everything, write policy</title>
+<style>
+:root{--bg:#fffdfa;--surf:#f6f3ee;--ink:#1a1a1a;--mut:#6b6660;--fnt:#9c968e;--rule:#ddd7ce;
+--box:#fff;--ac:#0f766e;--acb:#effcf9;--wn:#b45309;--wnb:#fffbeb;--go:#047857;--gob:#ecfdf5;
+--hl:#be123c;--lr:#6d28d9;--lrb:#f5f3ff;--fi:#1d4ed8;--fib:#eff6ff;--wire:#c9c2b8;--wf:#fbfaf8;}
+@media(prefers-color-scheme:dark){:root{--bg:#0c0c0e;--surf:#161618;--ink:#f2f2f0;--mut:#a3a099;
+--fnt:#75726c;--rule:#3a3a3e;--box:#1b1b1e;--ac:#5eead4;--acb:#0d2b28;--wn:#fbbf24;--wnb:#2a2010;
+--go:#34d399;--gob:#0f2a20;--hl:#fb7185;--lr:#c4b5fd;--lrb:#221a3a;--fi:#93c5fd;--fib:#15233f;
+--wire:#4a4a50;--wf:#141416;}}
+*{box-sizing:border-box}html,body{margin:0;background:var(--bg)}
+body{font:16px/1.65 ui-sans-serif,-apple-system,"Segoe UI",Inter,system-ui,sans-serif;color:var(--ink);padding:0 20px 80px}
+main{max-width:1140px;margin:0 auto}header{padding:56px 0 8px}
+h1{font-size:34px;line-height:1.15;letter-spacing:-.02em;margin:0 0 10px;font-weight:680}
+h2{font-size:23px;letter-spacing:-.01em;margin:56px 0 4px;font-weight:660;padding-top:26px;border-top:1px solid var(--rule)}
+h3{font-size:17px;margin:30px 0 6px;font-weight:640}
+.lede{font-size:19px;color:var(--mut);margin:0 0 4px;line-height:1.5}
+.eyebrow{font:650 11.5px ui-sans-serif,system-ui,sans-serif;letter-spacing:.11em;color:var(--fnt);text-transform:uppercase;margin:0 0 6px}
+p{margin:14px 0}svg{width:100%;height:auto;display:block;margin:22px 0 6px}
+.cap{font-size:13.5px;color:var(--fnt);margin:0 0 8px}
+table{border-collapse:collapse;width:100%;margin:18px 0;font-size:14.5px}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--rule);vertical-align:top}
+th{font-weight:640;color:var(--mut);font-size:13px;text-transform:uppercase;letter-spacing:.05em}
+code{font:13.5px ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--surf);border:1px solid var(--rule);border-radius:4px;padding:1px 5px}
+pre{background:var(--surf);border:1px solid var(--rule);border-radius:9px;padding:16px 18px;overflow-x:auto;font:13px/1.6 ui-monospace,Menlo,monospace}
+pre code{background:none;border:none;padding:0}
+.big{background:var(--box);border:1px solid var(--rule);border-left:3px solid var(--ac);border-radius:9px;padding:18px 22px;margin:22px 0;font-size:18px;line-height:1.5}
+.warn{background:var(--wnb);border:1px solid var(--wn);border-radius:9px;padding:16px 20px;margin:20px 0}
+.win{background:var(--gob);border:1px solid var(--go);border-radius:9px;padding:16px 20px;margin:20px 0}
+.err{background:var(--box);border:1px solid var(--hl);border-left:3px solid var(--hl);border-radius:9px;padding:16px 20px;margin:20px 0}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;margin:20px 0}
+.card{background:var(--box);border:1px solid var(--rule);border-radius:9px;padding:16px 18px}
+.card span{font-size:14px;color:var(--mut)}
+.num{font-size:30px;font-weight:680;letter-spacing:-.02em;display:block;line-height:1.1}
+ul,ol{margin:14px 0;padding-left:22px}li{margin:7px 0}
+.wl{font:600 13.5px ui-sans-serif,system-ui,sans-serif;fill:var(--ink)}
+.wb{font:13px ui-sans-serif,system-ui,sans-serif;fill:var(--mut)}
+.wt{font:11.5px ui-sans-serif,system-ui,sans-serif;fill:var(--fnt)}
+.wn2{font:650 12px ui-sans-serif,system-ui,sans-serif;letter-spacing:.08em;fill:var(--fnt)}
+.wbox{fill:var(--box);stroke:var(--rule);rx:9}
+.wfm{font:12.5px ui-monospace,Menlo,monospace;fill:var(--mut)}
+.wfr{fill:var(--wf);stroke:var(--wire);stroke-width:1.5}
+.btn{fill:var(--box);stroke:var(--wire);stroke-width:1.5;rx:7}
+</style></head><body><main>
+
+<header>
+<p class="eyebrow">AdministrateMe V3</p>
+<h1>Connect everything. Write policy as you go.</h1>
+<p class="lede">The queue isn't too full because too much arrives. It's too full because no policy exists yet. Two moments write that policy — connecting a source, and zeroing the queue — and they are the same act performed at different times.</p>
+</header>
+
+<h2>1. The root problem</h2>
+
+<p>Not "we forget things." That's the symptom, and building for the symptom is how you get 462 undecided items.</p>
+
+<div class="big">Things that need doing arrive scattered across many places. The cost of <b>moving one into where you'll actually look</b> is higher than the thing feels worth in the moment. So it doesn't get moved. So it's forgotten. And the pile of unmoved things becomes its own dread, which makes you avoid it, which makes it grow.</div>
+
+<p>The bottleneck, named precisely, is <b>the human decision, per item</b>. Which gives the only test that matters:</p>
+
+<div class="big" style="border-left-color:var(--hl)">Does the number of decisions you make go <b>down</b> as a fraction of what arrives? If not, the system fails — however good its capture, extraction or instrumentation.</div>
+
+<div class="grid">
+<div class="card"><span class="num">462</span><span>candidates waiting</span></div>
+<div class="card"><span class="num">0</span><span>decided</span></div>
+<div class="card"><span class="num">0</span><span>rules learned</span></div>
+<div class="card"><span class="num">369</span><span>unresolved senders</span></div>
+</div>
+
+<p>V2's capture is excellent — source accounting across 64,000 records, per-source freshness, "why is this here" on every row, observation mode. And it automated <b>arrival</b> without touching the cost of <b>departure</b>. Decisions-per-item is still 1.0.</p>
+
+<h2>2. The wrong fix, and why</h2>
+
+<div class="err"><b>I proposed restricting the input</b> — a shared inbox you forward things to. It's wrong, and the reason is worth stating because it rules out a whole family of "just connect less" answers.
+<br><br>
+<b>Forwarding fails on exactly the failure mode the system exists to fix.</b> The thing you forget to forward is the thing you were going to forget anyway. A capture mechanism that depends on remembering to capture is not a fix for forgetting — it's the same bet, made twice.</div>
+
+<p>Every variant has the same flaw. Connect one label, one folder, one VIP list: each one is a rule you have to author in advance, about senders you haven't met yet, at the moment when you know the least.</p>
+
+<h2>3. The real fix: policy density</h2>
+
+<p>462 isn't an input problem. It's a <b>policy</b> problem. V2 has zero rules, so every item is a first encounter, forever. The same twelve senders get re-decided every week.</p>
+
+<svg viewBox="0 0 1100 236" role="img" aria-label="Volume versus policy density">
+<rect x="0" y="16" width="530" height="200" class="wbox" style="stroke:var(--hl)"/>
+<text x="24" y="8" class="wn2">V2 — POLICY DENSITY 0%</text>
+<text x="24" y="48" class="wl">Every item is a first encounter</text>
+<text x="24" y="74" class="wb">456 conversations · 462 candidates · 0 rules</text>
+<rect x="24" y="92" width="482" height="26" rx="5" fill="var(--surf)" stroke="var(--rule)"/>
+<rect x="24" y="92" width="482" height="26" rx="5" fill="var(--hl)" opacity=".18"/>
+<text x="36" y="110" class="wb">100% of arrivals need you</text>
+<text x="24" y="146" class="wb">The same twelve senders get re-decided every week,</text>
+<text x="24" y="166" class="wb">because nothing was ever written down about them.</text>
+<text x="24" y="196" class="wt" style="fill:var(--hl)">This never converges. It cannot.</text>
+
+<rect x="570" y="16" width="530" height="200" class="wbox" style="stroke:var(--go)"/>
+<text x="594" y="8" class="wn2">V3 — POLICY DENSITY GROWS</text>
+<text x="594" y="48" class="wl">Same volume in. Far fewer decisions.</text>
+<text x="594" y="74" class="wb">everything connected · policy written twice over</text>
+<rect x="594" y="92" width="482" height="26" rx="5" fill="var(--surf)" stroke="var(--rule)"/>
+<rect x="594" y="92" width="290" height="26" rx="5" fill="var(--lr)" opacity=".3"/>
+<rect x="884" y="92" width="120" height="26" fill="var(--go)" opacity=".25"/>
+<text x="606" y="110" class="wt">wizard, at connect</text><text x="898" y="110" class="wt">zeroing</text><text x="1016" y="110" class="wt">you</text>
+<text x="594" y="146" class="wb">Most of what arrives is from senders you've met before.</text>
+<text x="594" y="166" class="wb">Decide about the <tspan class="wl">sender</tspan> once and every future item is handled.</text>
+<text x="594" y="196" class="wt" style="fill:var(--go)">The residual is genuinely new — and that's a small number.</text>
+</svg>
+<p class="cap">The lever is not how much you let in. It is what fraction of what arrives is already covered by something you decided earlier.</p>
+
+<div class="win"><b>Why this works arithmetically.</b> Mail volume is dominated by repeat senders — vendors, notifications, newsletters, the same dozen people. A decision about a <i>sender</i> is worth hundreds of decisions about <i>items</i>. Policy density climbs fast at first because you're covering the fat head of the distribution, then slowly, because what's left is the genuinely novel tail. That tail is what triage is for, and it is small.</div>
+
+<h2>4. One mechanism, two moments</h2>
+
+<p>This is the whole design, and it's why the system is simpler than it looks.</p>
+
+<svg viewBox="0 0 1100 300" role="img" aria-label="The wizard and zeroing are the same mechanism">
+<defs><marker id="ml" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--lr)"/></marker></defs>
+<rect x="0" y="30" width="500" height="140" class="wbox" style="stroke:var(--lr)"/>
+<text x="24" y="22" class="wn2" style="fill:var(--lr)">MOMENT 1 · NEW CONNECTION WIZARD</text>
+<text x="24" y="62" class="wl" style="font-size:15px">Zeroing, run against the past</text>
+<text x="24" y="88" class="wb">You connect Outlook. Before a single item reaches</text>
+<text x="24" y="108" class="wb">your queue, it shows you who actually writes to you,</text>
+<text x="24" y="128" class="wb">grouped, ranked by volume, and asks for a decision</text>
+<text x="24" y="148" class="wb">about each <tspan class="wl">sender</tspan> — not each message.</text>
+
+<rect x="600" y="30" width="500" height="140" class="wbox" style="stroke:var(--lr)"/>
+<text x="624" y="22" class="wn2" style="fill:var(--lr)">MOMENT 2 · ZEROING THE QUEUE</text>
+<text x="624" y="62" class="wl" style="font-size:15px">The wizard, run against the present</text>
+<text x="624" y="88" class="wb">Whatever policy didn't cover lands in triage. You</text>
+<text x="624" y="108" class="wb">work it in groups, and each decision offers the</text>
+<text x="624" y="128" class="wb">same checkbox — <tspan class="wl">always do this</tspan> — which writes</text>
+<text x="624" y="148" class="wb">the rule you didn't know you needed yet.</text>
+
+<path d="M506 100 H594" stroke="var(--lr)" stroke-width="1.8" fill="none" marker-end="url(#ml)"/>
+<path d="M594 100 H506" stroke="var(--lr)" stroke-width="1.8" fill="none" marker-end="url(#ml)"/>
+
+<rect x="140" y="200" width="820" height="86" rx="9" fill="var(--lrb)" stroke="var(--lr)" stroke-width="1.8"/>
+<text x="168" y="228" class="wn2" style="fill:var(--lr)">SAME ACT, SAME OUTPUT, SAME TABLE</text>
+<text x="168" y="256" class="wl">Group by sender · pick a disposition · a rule is written · it applies forward and back.</text>
+<text x="168" y="278" class="wb">Build it once. The wizard is that screen pointed at history; triage is that screen pointed at now.</text>
+</svg>
+<p class="cap">One component, two entry points. If you find yourself building two grouping engines, stop — you've split something that should be shared.</p>
+
+<h2>5. The New Connection Wizard</h2>
+
+<p>The piece I missed entirely, and the one that makes connecting everything safe. It runs once per connection and its job is to <b>end with policy already written</b>.</p>
+
+<table>
+<tr><th>Step</th><th>What happens</th><th>Why it's here</th></tr>
+<tr><td>1 · Connect</td><td>OAuth, read-only to start</td><td>Read-only until you've seen it behave</td></tr>
+<tr><td>2 · Scope</td><td>Which mailbox, labels, folders. For iMessage and WhatsApp: which conversations, group chats off by default</td><td>A boundary you can widen later beats one you regret</td></tr>
+<tr><td>3 · <b>Meet your senders</b></td><td>Scans history. Clusters by sender and thread. Shows the top ones by volume with a running coverage figure</td><td><b>This is the step that matters.</b> One decision per sender covers hundreds of future items</td></tr>
+<tr><td>4 · Defaults for the rest</td><td>What happens to a sender you haven't met — triage, always</td><td>The unknown must never be auto-disposed</td></tr>
+<tr><td>5 · History</td><td>Start from today, or sweep the backlog with the rules you just made</td><td>Sweeping is usually right — you just wrote the policy for it</td></tr>
+<tr><td>6 · Summary</td><td>"14 rules · covers about 78% of your incoming mail · the rest goes to triage"</td><td>You finish knowing what you signed up for</td></tr>
+</table>
+
+<h3>Step 3, wireframed — the screen that does the work</h3>
+
+<svg viewBox="0 0 1100 500" role="img" aria-label="New Connection Wizard step 3">
+<rect x="0" y="0" width="1100" height="500" rx="10" class="wfr"/>
+<line x1="0" y1="62" x2="1100" y2="62" stroke="var(--wire)"/>
+<text x="26" y="30" class="wl" style="font-size:16px">Connect Outlook — who actually writes to you</text>
+<text x="26" y="50" class="wt">Scanned 90 days · 2,140 messages · 186 senders</text>
+<rect x="880" y="20" width="194" height="28" rx="14" fill="var(--gob)" stroke="var(--go)"/>
+<text x="898" y="39" class="wt" style="fill:var(--go)">covers 78% · 14 rules so far</text>
+<rect x="26" y="72" width="1048" height="6" rx="3" fill="var(--rule)"/>
+<rect x="26" y="72" width="818" height="6" rx="3" fill="var(--go)"/>
+
+<text x="26" y="106" class="wn2">THESE 6 SENDERS ARE 61% OF YOUR MAIL</text>
+
+<rect x="26" y="118" width="1048" height="52" rx="8" fill="var(--box)" stroke="var(--wire)"/>
+<text x="46" y="140" class="wl">Concur · expense notifications</text><text x="46" y="159" class="wt">418 messages · never replied to any of them</text>
+<rect x="560" y="130" width="104" height="28" class="btn"/><text x="586" y="149" class="wb">Calendar</text>
+<rect x="674" y="130" width="104" height="28" class="btn"/><text x="700" y="149" class="wb">Remind</text>
+<rect x="788" y="130" width="104" height="28" class="btn" style="fill:var(--acb);stroke:var(--ac)"/><text x="820" y="149" class="wb" style="fill:var(--ac)">File</text>
+<rect x="902" y="130" width="104" height="28" class="btn"/><text x="936" y="149" class="wb">Drop</text>
+<rect x="1016" y="130" width="42" height="28" class="btn"/><text x="1028" y="149" class="wb">···</text>
+
+<rect x="26" y="178" width="1048" height="52" rx="8" fill="var(--box)" stroke="var(--wire)"/>
+<text x="46" y="200" class="wl">LinkedIn · digests and invitations</text><text x="46" y="219" class="wt">296 messages · opened 3</text>
+<rect x="560" y="190" width="104" height="28" class="btn"/><text x="586" y="209" class="wb">Calendar</text>
+<rect x="674" y="190" width="104" height="28" class="btn"/><text x="700" y="209" class="wb">Remind</text>
+<rect x="788" y="190" width="104" height="28" class="btn"/><text x="820" y="209" class="wb">File</text>
+<rect x="902" y="190" width="104" height="28" class="btn" style="fill:var(--wnb);stroke:var(--wn)"/><text x="932" y="209" class="wb" style="fill:var(--wn)">Drop</text>
+<rect x="1016" y="190" width="42" height="28" class="btn"/><text x="1028" y="209" class="wb">···</text>
+
+<rect x="26" y="238" width="1048" height="52" rx="8" fill="var(--box)" stroke="var(--wire)"/>
+<text x="46" y="260" class="wl">Sarah Chen · your manager</text><text x="46" y="279" class="wt">184 messages · you reply to 92% of them</text>
+<rect x="560" y="250" width="104" height="28" class="btn"/><text x="586" y="269" class="wb">Calendar</text>
+<rect x="674" y="250" width="104" height="28" class="btn"/><text x="700" y="269" class="wb">Remind</text>
+<rect x="788" y="250" width="104" height="28" class="btn"/><text x="820" y="269" class="wb">File</text>
+<rect x="902" y="250" width="104" height="28" class="btn"/><text x="936" y="269" class="wb">Drop</text>
+<rect x="1016" y="250" width="42" height="28" class="btn"/><text x="1028" y="269" class="wb">···</text>
+
+<rect x="26" y="298" width="1048" height="52" rx="8" fill="var(--box)" stroke="var(--wire)"/>
+<text x="46" y="320" class="wl">Docusign · signature requests</text><text x="46" y="339" class="wt">67 messages · always acted on within a day</text>
+<rect x="560" y="310" width="104" height="28" class="btn"/><text x="586" y="329" class="wb">Calendar</text>
+<rect x="674" y="310" width="104" height="28" class="btn" style="fill:var(--gob);stroke:var(--go)"/><text x="696" y="329" class="wb" style="fill:var(--go)">Remind</text>
+<rect x="788" y="310" width="104" height="28" class="btn"/><text x="820" y="329" class="wb">File</text>
+<rect x="902" y="310" width="104" height="28" class="btn"/><text x="936" y="329" class="wb">Drop</text>
+<rect x="1016" y="310" width="42" height="28" class="btn"/><text x="1028" y="329" class="wb">···</text>
+
+<text x="26" y="378" class="wt">+ 180 more senders, 39% of volume, mostly one-offs</text>
+<rect x="26" y="392" width="1048" height="44" rx="8" fill="var(--lrb)" stroke="var(--lr)"/>
+<text x="46" y="420" class="wb" style="fill:var(--lr)">Everyone you haven't decided about goes to triage. That's the point — the unknown is never auto-disposed.</text>
+
+<rect x="26" y="452" width="180" height="34" class="btn" style="fill:var(--gob);stroke:var(--go)"/>
+<text x="62" y="474" class="wl" style="fill:var(--go)">Next — history</text>
+<text x="230" y="474" class="wt">You can change any of this later. Rules are switchable, and switching one off brings its items back.</text>
+</svg>
+<p class="cap">Four buttons per sender — the same four as triage. Six decisions here removed roughly 900 future ones.</p>
+
+<div class="warn"><b>The rule that keeps the wizard honest.</b> It uses <b>behaviour, not content</b>, to rank and describe — how many, whether you ever replied, whether you ever opened it. Never "this looks unimportant." Behavioural evidence is checkable by you in one glance; a model's opinion about importance is not, and you'd have no way to catch it being wrong.</div>
+
+<h2>6. Architecture — federated members, one queue each</h2>
+
+<svg viewBox="0 0 1100 400" role="img" aria-label="Federated members architecture">
+<defs><marker id="ma" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--ac)"/></marker></defs>
+<rect x="0" y="26" width="530" height="150" class="wbox" style="stroke:var(--ac)"/>
+<text x="24" y="18" class="wn2">MEMBER · JIMMY</text>
+<text x="24" y="54" class="wb">Gmail personal · Gmail work · Outlook</text>
+<text x="24" y="76" class="wb">iMessage · WhatsApp · Notes · Plaid</text>
+<text x="24" y="104" class="wl">Every connection has its own wizard run,</text>
+<text x="24" y="124" class="wl">its own scope, its own rules.</text>
+<text x="24" y="154" class="wt">All of them federate into one queue — his.</text>
+
+<rect x="570" y="26" width="530" height="150" class="wbox" style="stroke:var(--ac)"/>
+<text x="594" y="18" class="wn2">MEMBER · LAURA</text>
+<text x="594" y="54" class="wb">Her inboxes, her connections,</text>
+<text x="594" y="76" class="wb">her wizard runs, her rules.</text>
+<text x="594" y="104" class="wl">Her queue is hers. Her mail never</text>
+<text x="594" y="124" class="wl">appears in his triage.</text>
+<text x="594" y="154" class="wt">Privacy boundary is the member, not the household.</text>
+
+<path d="M265 180 V212 H550 V236" stroke="var(--ac)" stroke-width="1.8" fill="none" marker-end="url(#ma)"/>
+<path d="M835 180 V212 H550" stroke="var(--ac)" stroke-width="1.8" fill="none"/>
+
+<rect x="230" y="240" width="640" height="66" rx="9" fill="var(--gob)" stroke="var(--go)"/>
+<text x="254" y="266" class="wn2" style="fill:var(--go)">HOUSEHOLD — WHAT LANDS, NOT WHAT ARRIVED</text>
+<text x="254" y="292" class="wl">Shared calendars and shared lists. The outcome is shared; the inbox never is.</text>
+
+<rect x="0" y="330" width="1100" height="62" rx="9" fill="var(--surf)" stroke="var(--rule)"/>
+<text x="24" y="356" class="wl">Why the boundary sits at the member</text>
+<text x="24" y="378" class="wb">Because "connect all my inboxes" only stays acceptable if the other person's mail is never a thing you can browse. Shared destinations give you the coordination without the exposure.</text>
+</svg>
+
+<h2>7. The four gates</h2>
+
+<svg viewBox="0 0 1100 470" role="img" aria-label="Four gates">
+<defs><marker id="m4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--mut)"/></marker>
+<marker id="m5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--go)"/></marker>
+<marker id="m6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--fnt)"/></marker></defs>
+<style>.fl{stroke:var(--mut);stroke-width:1.6;fill:none}.gl{stroke:var(--go);stroke-width:1.6;fill:none}
+.sl{stroke:var(--fnt);stroke-width:1.4;fill:none;stroke-dasharray:4 4}</style>
+
+<rect x="330" y="0" width="440" height="40" class="wbox" style="stroke:var(--ac)"/>
+<text x="352" y="26" class="wl">Anything arrives, from any connection</text>
+<path d="M550 42 V64" class="fl" marker-end="url(#m4)"/>
+
+<rect x="330" y="66" width="440" height="52" rx="9" fill="var(--wnb)" stroke="var(--wn)"/>
+<text x="352" y="88" class="wl" style="fill:var(--wn)">GATE 1 · Hostile or worthless</text>
+<text x="352" y="107" class="wb">Phishing, spam, marketing. Mostly deterministic.</text>
+<path d="M776 92 H864" class="sl" marker-end="url(#m6)"/>
+<rect x="870" y="70" width="230" height="44" class="wbox"/>
+<text x="888" y="89" class="wl">Quarantined</text><text x="888" y="107" class="wt">listed, never surfaced as work</text>
+<path d="M550 120 V142" class="fl" marker-end="url(#m4)"/>
+
+<rect x="330" y="144" width="440" height="60" rx="9" fill="var(--lrb)" stroke="var(--lr)" stroke-width="1.8"/>
+<text x="352" y="166" class="wl" style="fill:var(--lr)">GATE 2 · Policy — the whole game</text>
+<text x="352" y="185" class="wb">A rule from the wizard, or a rule from a zeroing session.</text>
+<text x="352" y="200" class="wt" style="fill:var(--lr)">the more of these there are, the less of your life this costs</text>
+<path d="M776 174 H864" class="gl" marker-end="url(#m5)"/>
+<rect x="870" y="152" width="230" height="44" class="wbox" style="fill:var(--gob);stroke:var(--go)"/>
+<text x="888" y="171" class="wl">Handled without you</text><text x="888" y="189" class="wt">logged, undoable, never silent</text>
+<path d="M550 206 V228" class="fl" marker-end="url(#m4)"/>
+
+<rect x="330" y="230" width="440" height="52" rx="9" class="wbox"/>
+<text x="352" y="252" class="wl">GATE 3 · Seen it already</text>
+<text x="352" y="271" class="wb">Same thing in two inboxes, or two members. One item, many sources.</text>
+<path d="M550 284 V306" class="fl" marker-end="url(#m4)"/>
+
+<rect x="330" y="308" width="440" height="52" class="wbox" style="stroke:var(--ac)"/>
+<text x="352" y="330" class="wl">Draft a proposal</text>
+<text x="352" y="349" class="wb">One model call. One form. It drafts; it never decides.</text>
+<path d="M550 362 V384" class="fl" marker-end="url(#m4)"/>
+
+<rect x="250" y="386" width="600" height="76" rx="9" fill="var(--lrb)" stroke="var(--lr)" stroke-width="1.8"/>
+<text x="274" y="412" class="wl" style="fill:var(--lr)">GATE 4 · You — and only for what policy didn't cover</text>
+<text x="274" y="434" class="wb">Add · Remind · File · Drop, plus the checkbox that writes the rule.</text>
+<text x="274" y="452" class="wb">Every pass through here makes Gate 2 bigger and this gate smaller.</text>
+<path d="M854 424 H1046 V180" class="sl" marker-end="url(#m6)"/>
+</svg>
+<p class="cap">Gate 2 is the one that grows. Everything else is fixed cost.</p>
+
+<h2>8. The data model</h2>
+
+<pre><code>members        jimmy · laura                    privacy boundary lives here
+  id · name · role
+
+connections    one row per inbox, per member
+  id · member_id · provider · scope · read_only · connected_at
+  wizard_completed_at · policy_coverage_pct
+
+items          one row per thing, from any connection
+  id · connection_id · external_id · sender · subject · body · received_at
+  status: new | proposed | done | dropped | auto
+  proposal: (JSON)
+
+decisions      append-only. never updated, never deleted
+  id · item_id · action · target · decided_at
+  decided_by: member_id | "rule:&lt;id&gt;" | "wizard:&lt;connection_id&gt;"
+
+rules          written by the wizard AND by zeroing — same table
+  id · member_id · match_connection_id · match_sender · match_sender_domain
+  match_subject_contains · action · target · origin: "wizard" | "zeroing"
+  created_from_decision · hits · last_fired_at · active
+
+pushes         what went where, so it can be found and undone
+  id · item_id · provider · provider_id · idempotency · pushed_at · undone_at
+
+patterns       arrives with Plaid; recurring things found in spending
+  id · member_id · merchant · cadence · occurrences · avg_amount
+  status: proposed | accepted | dismissed</code></pre>
+
+<p><b>One <code>rules</code> table, two origins.</b> If the wizard wrote to a different table than zeroing, you'd have two policy systems that disagree — and you'd find out months later when one of them stopped applying.</p>
+
+<h3>The extraction contract — the entire AI surface</h3>
+
+<pre><code>{
+  "kind":  "calendar" | "reminder" | "file" | "drop",
+  "title": "Flight DL2411 to Vancouver",
+  "when":  "2026-08-28T06:15:00-04:00",   // null when there is no time
+  "list":  "Personal",
+  "why":   "Delta confirmation with a departure time",
+  "sure":  true                            // false = ask, don't pre-fill
+}</code></pre>
+
+<div class="warn"><b>Never invent a date.</b> No time in the text means <code>when</code> is <code>null</code> and it becomes a reminder, not a calendar entry. A plausible guessed date is worse than no date, because you'll act on it.</div>
+
+<h2>9. Triage — what policy didn't cover</h2>
+
+<svg viewBox="0 0 1100 520" role="img" aria-label="Triage wireframe">
+<rect x="0" y="0" width="1100" height="520" rx="10" class="wfr"/>
+<line x1="0" y1="56" x2="1100" y2="56" stroke="var(--wire)"/>
+<text x="26" y="35" class="wl" style="font-size:16px">Triage</text>
+<rect x="112" y="20" width="160" height="24" rx="12" fill="var(--lrb)" stroke="var(--lr)"/>
+<text x="128" y="37" class="wt" style="fill:var(--lr)">12 waiting · was 47</text>
+<text x="286" y="37" class="wt">policy covers 78% of what arrives</text>
+<text x="872" y="30" class="wb">Today</text><text x="944" y="30" class="wb">Rules</text><text x="1012" y="30" class="wb">Connections</text>
+
+<rect x="26" y="80" width="1048" height="6" rx="3" fill="var(--rule)"/>
+<rect x="26" y="80" width="770" height="6" rx="3" fill="var(--go)"/>
+<text x="26" y="108" class="wt">35 cleared today · 6 rules written · ~4 minutes left at this pace</text>
+
+<rect x="180" y="126" width="740" height="284" rx="12" fill="var(--box)" stroke="var(--wire)" stroke-width="1.5"/>
+<text x="208" y="158" class="wt">JIMMY · GMAIL PERSONAL · 2 HOURS AGO</text>
+<text x="208" y="186" class="wl" style="font-size:16px">Delta — "Your flight to Vancouver"</text>
+<text x="208" y="210" class="wb">DL2411 · departs Thu 28 Aug 6:15am · ref KX8P2Q</text>
+<line x1="208" y1="228" x2="892" y2="228" stroke="var(--rule)"/>
+<rect x="208" y="244" width="684" height="90" rx="9" fill="var(--acb)" stroke="var(--ac)"/>
+<text x="228" y="268" class="wt" style="fill:var(--ac)">SUGGESTED · CALENDAR</text>
+<text x="228" y="294" class="wl" style="font-size:15px">Flight DL2411 to Vancouver</text>
+<text x="228" y="318" class="wb">Thu 28 Aug · 6:15 – 9:40 AM</text>
+<rect x="740" y="282" width="132" height="30" rx="7" fill="var(--box)" stroke="var(--wire)"/>
+<text x="756" y="302" class="wb">Personal ▾</text>
+
+<rect x="208" y="352" width="122" height="40" class="btn" style="fill:var(--gob);stroke:var(--go)"/>
+<text x="234" y="377" class="wl" style="fill:var(--go)">✓ Add</text>
+<rect x="342" y="352" width="126" height="40" class="btn"/><text x="366" y="377" class="wl">Remind</text>
+<rect x="480" y="352" width="100" height="40" class="btn"/><text x="508" y="377" class="wl">File</text>
+<rect x="592" y="352" width="100" height="40" class="btn"/><text x="622" y="377" class="wl">Drop</text>
+<rect x="726" y="352" width="166" height="40" rx="7" fill="var(--lrb)" stroke="var(--lr)"/>
+<text x="744" y="371" class="wt" style="fill:var(--lr)">☐ Always, for Delta</text>
+<text x="744" y="386" class="wt" style="fill:var(--lr)">— covers 3 more waiting</text>
+
+<rect x="180" y="430" width="740" height="42" rx="9" fill="var(--surf)" stroke="var(--wire)"/>
+<text x="204" y="456" class="wfm">A</text><text x="222" y="456" class="wb">add</text>
+<text x="272" y="456" class="wfm">R</text><text x="290" y="456" class="wb">remind</text>
+<text x="358" y="456" class="wfm">F</text><text x="376" y="456" class="wb">file</text>
+<text x="424" y="456" class="wfm">D</text><text x="442" y="456" class="wb">drop</text>
+<text x="500" y="456" class="wfm">E</text><text x="518" y="456" class="wb">edit</text>
+<text x="572" y="456" class="wfm">⌘Z</text><text x="602" y="456" class="wb">undo</text>
+<text x="672" y="456" class="wfm">⇧A</text><text x="704" y="456" class="wb">add + always</text>
+<text x="180" y="500" class="wt">Next: 3 more from Delta · 6 from Monarch · 2 from Laura's shared list</text>
+<text x="800" y="500" class="wt">Work a group ▸</text>
+</svg>
+<p class="cap">Identical four buttons to the wizard. Same grouping engine. The only difference is which items it's pointed at.</p>
+
+<h2>10. How to build it — six weeks</h2>
+
+<p>Order matters more than speed. The constraint that sets it: <b>you cannot safely connect a real inbox until the wizard exists.</b> So weeks 1–3 build the machine against a deliberately tiny scope, and week 4 is what unlocks everything else.</p>
+
+<table>
+<tr><th>Week</th><th>Build</th><th>End state</th></tr>
+<tr><td><b>1</b></td><td>members · connections · items · decisions · pushes. One connection, scoped to <b>the last 7 days of one label</b>. Triage screen, four buttons. Push to Google Calendar and Reminders. <b>No AI.</b></td><td>The machine works end to end against a handful of items. Nothing can drown you.</td></tr>
+<tr><td><b>2</b></td><td>The single model call. The card pre-fills.</td><td>Two seconds an item instead of thirty.</td></tr>
+<tr><td><b>3</b></td><td><code>rules</code> · the always-checkbox · rules applied at Gate 2 · grouping · retroactive sweep · Rules screen.</td><td>Policy exists and works. <b>This is the product.</b></td></tr>
+<tr><td><b>4</b></td><td><b>The New Connection Wizard</b>, reusing week 3's grouping component pointed at history.</td><td>You can now connect a real inbox without drowning.</td></tr>
+<tr><td><b>5</b></td><td>Connect for real, one at a time, wizard each: Gmail → Outlook → iMessage → WhatsApp. Laura's connections after yours.</td><td>Everything is in. Policy density climbs with each one.</td></tr>
+<tr><td><b>6</b></td><td>Plaid patterns · Notes · Today screen · duplicate detection across connections.</td><td>Obligations you never wrote down, and todos buried in your own prose.</td></tr>
+</table>
+
+<div class="win"><b>Why no AI in week 1.</b> If the model never works you still have a working system. Every dependency deferred past the first useful version is one that can't sink it.</div>
+
+<div class="warn"><b>The sequencing rule that protects you.</b> One new connection at a time, and don't start the next until the last one's queue has been zeroed once. Connect four at once and you have no way to tell which one is generating the noise — and iMessage and WhatsApp go <b>last</b>, after the person-to-person bar has been proven against real transactional volume.</div>
+
+<h2>11. What we are not building</h2>
+
+<table>
+<tr><th>Not building</th><th>Because</th></tr>
+<tr><td>A forwarding inbox</td><td>Depends on remembering to capture, which is the thing that's broken.</td></tr>
+<tr><td>A knowledge graph engine</td><td>Relations that matter are links between items. Store a link; don't build a graph.</td></tr>
+<tr><td>Confidence classes, readiness states, source accounting</td><td>Excellent for many consumers of one truth. You have one consumer — you.</td></tr>
+<tr><td>A People directory</td><td>People emerge from senders, and the wizard already ranks them by how you behave toward them.</td></tr>
+<tr><td>Comms and Scoreboard surfaces</td><td>Your mail clients are the comms surface. Progress is the bar at the top of triage.</td></tr>
+<tr><td>Cross-member browsing</td><td>Members share destinations, never inboxes. That's what makes connecting everything acceptable.</td></tr>
+</table>
+
+<h2>12. The test to hold it to</h2>
+
+<div class="big">Two numbers, weekly.<br><br>
+<b>Policy coverage</b> — what share of arrivals were handled without you. Should climb steeply, then flatten high.<br>
+<b>Decisions per week</b> — should fall while volume stays flat or rises.<br><br>
+If coverage is flat and decisions aren't falling, the learning loop is broken, and nothing else matters until it isn't.</div>
+
+<p>Every part of this exists to move those two numbers. The wizard front-loads coverage; zeroing grows it; Gate 2 spends it. Anything proposed later that doesn't move them — however clever — is elaboration, and elaboration is what produced 462.</p>
+
+<p style="margin-top:36px;color:var(--fnt);font-size:14px">Connect everything. Decide about senders, not messages. Let the wizard and the zeroing write the same rules into the same table. That's the system.</p>
+
+</main></body></html>

@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AdministrateMe V3 — platform architecture</title>
+<style>
+:root{--bg:#fff;--ink:#18181b;--muted:#71717a;--faint:#a1a1aa;--rule:#d4d4d8;--box:#fff;
+--accent:#0f766e;--accent-bg:#f0fdfa;--warn:#b45309;--warn-bg:#fffbeb;--go:#047857;--go-bg:#ecfdf5;
+--halt:#be123c;--halt-bg:#fff1f2;--learn:#6d28d9;--learn-bg:#f5f3ff;}
+@media(prefers-color-scheme:dark){:root{--bg:#0b0b0d;--ink:#f4f4f5;--muted:#a1a1aa;--faint:#71717a;--rule:#3f3f46;--box:#1c1c20;
+--accent:#5eead4;--accent-bg:#0d2b28;--warn:#fbbf24;--warn-bg:#2a2010;--go:#34d399;--go-bg:#0f2a20;
+--halt:#fb7185;--halt-bg:#2a1218;--learn:#c4b5fd;--learn-bg:#221a3a;}}
+*{box-sizing:border-box}html,body{margin:0;background:var(--bg)}
+body{font:15px/1.6 ui-sans-serif,-apple-system,"Segoe UI",Inter,system-ui,sans-serif;color:var(--ink);padding:32px 20px 64px}
+main{max-width:1180px;margin:0 auto}
+h1{font-size:22px;letter-spacing:-.01em;margin:0 0 4px;font-weight:650}
+h2{font-size:15px;margin:34px 0 10px;font-weight:650}
+.sub{color:var(--muted);margin:0 0 28px}
+svg{width:100%;height:auto;display:block}
+p{margin:0 0 12px;max-width:74ch}
+.legend{display:flex;flex-wrap:wrap;gap:8px 26px;margin-top:22px;padding-top:16px;border-top:1px solid var(--rule);font-size:13.5px;color:var(--muted)}
+.legend b{color:var(--ink);font-weight:600}
+.sw{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:7px;vertical-align:-1px}
+table{border-collapse:collapse;width:100%;font-size:14px;margin:6px 0 4px}
+th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--rule);vertical-align:top}
+th{font-weight:650;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+code{font:12.5px ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--accent-bg);color:var(--accent);padding:1px 5px;border-radius:4px}
+pre{background:var(--box);border:1px solid var(--rule);border-radius:8px;padding:14px 16px;overflow:auto;font:12.5px/1.55 ui-monospace,Menlo,monospace;color:var(--ink)}
+blockquote{margin:14px 0;padding:12px 16px;border-left:3px solid var(--learn);background:var(--learn-bg);border-radius:0 8px 8px 0;font-weight:600}
+</style></head><body><main>
+
+<h1>AdministrateMe V3 — platform architecture</h1>
+<p class="sub">Everything a member owns flows into one queue. Nothing leaves it undecided. Every decision can leave a rule behind, and the rules are why it converges.</p>
+
+<svg viewBox="0 0 1180 700" role="img" aria-describedby="d">
+<desc id="d">Each member federates their own inboxes. A new connection cannot produce items until its wizard has run. Arrivals pass four gates in order: hostile-or-worthless, policy, seen-it-already, and finally you. One model call drafts a proposal between gate three and gate four; it never decides. Confirmed items push to Google Calendar or a reminders list with an idempotency key. Both the wizard and zeroing write to the same rules table, which is what makes gate two grow and gate four shrink.</desc>
+<style>
+.lbl{font:600 13px ui-sans-serif,system-ui,sans-serif;fill:var(--ink)}
+.bd{font:12.5px ui-sans-serif,system-ui,sans-serif;fill:var(--muted)}
+.tn{font:11px ui-sans-serif,system-ui,sans-serif;fill:var(--faint)}
+.hd{font:650 11.5px ui-sans-serif,system-ui,sans-serif;fill:var(--faint);letter-spacing:.1em}
+.box{fill:var(--box);stroke:var(--rule);stroke-width:1;rx:8}
+.ln{stroke:var(--muted);stroke-width:1.4;fill:none}
+.lnl{stroke:var(--learn);stroke-width:1.8;fill:none}
+.lng{stroke:var(--go);stroke-width:1.6;fill:none}
+.dsh{stroke-dasharray:4 4}
+.mono{font:11.5px ui-monospace,Menlo,monospace;fill:var(--muted)}
+</style>
+<defs>
+<marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="var(--muted)"/></marker>
+<marker id="al" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="var(--learn)"/></marker>
+<marker id="ag" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="var(--go)"/></marker>
+</defs>
+
+<!-- sources -->
+<text x="20" y="24" class="hd">SOURCES — FEDERATED PER MEMBER. THE PRIVACY BOUNDARY IS THE MEMBER, NOT THE HOUSEHOLD</text>
+<rect x="20" y="36" width="250" height="270" class="box"/>
+<text x="36" y="60" class="lbl">James</text>
+<g class="bd">
+<text x="36" y="82">Gmail ×N</text><text x="36" y="102">Outlook (work)</text><text x="36" y="122">iMessage</text>
+<text x="36" y="142">WhatsApp</text><text x="36" y="162">Apple Notes / Obsidian</text><text x="36" y="182">Plaid — spending signals</text>
+</g>
+<line x1="36" y1="198" x2="254" y2="198" stroke="var(--rule)"/>
+<text x="36" y="220" class="lbl">Laura</text>
+<text x="36" y="242" class="bd">her inboxes, hers alone</text>
+<text x="36" y="266" class="tn">Households share destinations,</text>
+<text x="36" y="281" class="tn">never inboxes. That is what makes</text>
+<text x="36" y="296" class="tn">connecting everything acceptable.</text>
+
+<path d="M270 170 H 306" class="ln" marker-end="url(#a)"/>
+
+<!-- wizard gate -->
+<rect x="306" y="36" width="250" height="140" class="box" style="fill:var(--learn-bg);stroke:var(--learn)"/>
+<text x="322" y="60" class="hd" style="fill:var(--learn)">NEW CONNECTION WIZARD</text>
+<text x="322" y="84" class="bd">Connect · scope · <tspan class="lbl">meet your senders</tspan></text>
+<text x="322" y="104" class="bd">· defaults · history · summary</text>
+<text x="322" y="128" class="tn">Senders described by behaviour —</text>
+<text x="322" y="143" class="tn">volume, did you reply, did you open.</text>
+<text x="322" y="158" class="tn">Never by a model's opinion of importance.</text>
+
+<rect x="306" y="188" width="250" height="56" class="box" style="fill:var(--halt-bg);stroke:var(--halt)"/>
+<text x="322" y="210" class="lbl" style="fill:var(--halt)">I-2 · no wizard, no items</text>
+<text x="322" y="230" class="tn">a connection with no wizard_completed_at</text>
+
+<text x="322" y="272" class="bd">Policy exists <tspan class="lbl">before</tspan> volume. This</text>
+<text x="322" y="290" class="bd">is the whole reason V3 ≠ V2.</text>
+
+<path d="M556 140 H 596" class="ln" marker-end="url(#a)"/>
+
+<!-- gates -->
+<text x="596" y="24" class="hd">THE FOUR GATES — IN ORDER. ONLY THE LAST ONE COSTS YOU ANYTHING</text>
+<rect x="596" y="36" width="330" height="46" class="box"/>
+<text x="610" y="58" class="lbl">1 · Hostile or worthless</text>
+<text x="610" y="75" class="tn">phishing, spam, bulk marketing → quarantine · cost: fixed</text>
+
+<path d="M761 82 V 100" class="ln" marker-end="url(#a)"/>
+<rect x="596" y="106" width="330" height="58" class="box" style="fill:var(--learn-bg);stroke:var(--learn)"/>
+<text x="610" y="128" class="lbl" style="fill:var(--learn)">2 · Policy — a rule handles it</text>
+<text x="610" y="145" class="tn">decided_by = "rule:&lt;id&gt;" · logged · undoable (I-5)</text>
+<text x="610" y="159" class="tn" style="fill:var(--learn)">cost: GROWS. this is the entire game</text>
+
+<path d="M761 164 V 182" class="ln" marker-end="url(#a)"/>
+<rect x="596" y="188" width="330" height="46" class="box"/>
+<text x="610" y="210" class="lbl">3 · Seen it already</text>
+<text x="610" y="227" class="tn">two inboxes or two members → one item, two sources</text>
+
+<path d="M761 234 V 252" class="ln" marker-end="url(#a)"/>
+<rect x="596" y="258" width="330" height="54" class="box" style="fill:var(--warn-bg);stroke:var(--warn)"/>
+<text x="610" y="280" class="lbl" style="fill:var(--warn)">one model call — drafts, never decides</text>
+<text x="610" y="297" class="tn">off-contract or failed → the item arrives undrafted. Floor: no worse than manual</text>
+
+<path d="M761 312 V 330" class="ln" marker-end="url(#a)"/>
+
+<!-- triage -->
+<rect x="20" y="336" width="906" height="176" class="box" style="fill:var(--accent-bg);stroke:var(--accent)"/>
+<text x="36" y="360" class="hd" style="fill:var(--accent)">4 · TRIAGE — THE HUMAN GATE, AND THE ONLY PLACE POLICY IS WRITTEN</text>
+<text x="36" y="386" class="bd"><tspan class="lbl">Nothing leaves undecided.</tspan> One entrance, one exit. Groups by sender, not by time. Keyboard-first. Undo the batch.</text>
+
+<g>
+<rect x="36" y="400" width="150" height="44" class="box"/><text x="111" y="420" class="lbl" text-anchor="middle">Add</text><text x="111" y="436" class="tn" text-anchor="middle">has a time → calendar</text>
+<rect x="196" y="400" width="150" height="44" class="box"/><text x="271" y="420" class="lbl" text-anchor="middle">Remind</text><text x="271" y="436" class="tn" text-anchor="middle">no time → a list</text>
+<rect x="356" y="400" width="150" height="44" class="box"/><text x="431" y="420" class="lbl" text-anchor="middle">File</text><text x="431" y="436" class="tn" text-anchor="middle">a fact, not an obligation</text>
+<rect x="516" y="400" width="150" height="44" class="box"/><text x="591" y="420" class="lbl" text-anchor="middle">Drop</text><text x="591" y="436" class="tn" text-anchor="middle">never again</text>
+<rect x="576" y="400" width="0" height="0"/>
+</g>
+<rect x="676" y="396" width="234" height="52" class="box" style="fill:var(--learn-bg);stroke:var(--learn)"/>
+<text x="690" y="418" class="lbl" style="fill:var(--learn)">☑ always do this for …</text>
+<text x="690" y="436" class="tn">same gesture. one click. or no rule is ever made</text>
+
+<text x="36" y="470" class="bd">Queue depth is never shown without its slope. The counter that matters is <tspan class="lbl">decisions per item as a fraction of arrivals</tspan> — falling.</text>
+<text x="36" y="494" class="tn">`decisions` is append-only (I-4). A correction is a new row. It is not an audit log that happens to be useful — it is the record rules are proposed from.</text>
+
+<!-- rules loop -->
+<path d="M790 396 V 372 H 960 V 200" class="lnl" marker-end="url(#al)"/>
+<rect x="946" y="106" width="214" height="94" class="box" style="fill:var(--learn-bg);stroke:var(--learn)"/>
+<text x="960" y="130" class="hd" style="fill:var(--learn)">ONE `rules` TABLE</text>
+<text x="960" y="152" class="bd">wizard writes here</text>
+<text x="960" y="170" class="bd">zeroing writes here</text>
+<text x="960" y="190" class="tn">I-6 · a second store is rejected</text>
+
+<rect x="946" y="212" width="214" height="100" class="box"/>
+<text x="960" y="234" class="lbl">Preview, then sweep</text>
+<text x="960" y="254" class="tn">forward count · historical count</text>
+<text x="960" y="270" class="tn">· the browsable list</text>
+<text x="960" y="292" class="tn">activation disposes the backlog as</text>
+<text x="960" y="306" class="tn">one reversible batch</text>
+
+<rect x="946" y="324" width="214" height="76" class="box"/>
+<text x="960" y="346" class="lbl">Rules screen</text>
+<text x="960" y="366" class="tn">hit count · last fired · a switch</text>
+<text x="960" y="386" class="tn">switch one off, its items come back</text>
+
+<!-- destinations -->
+<path d="M300 512 V 538" class="lng" marker-end="url(#ag)"/>
+<path d="M620 512 V 538" class="lng" marker-end="url(#ag)"/>
+<text x="20" y="558" class="hd">DESTINATIONS — SHARED ACROSS THE HOUSEHOLD. THE SYSTEM NEVER HOLDS THE ONLY COPY</text>
+<rect x="20" y="570" width="440" height="72" class="box" style="fill:var(--go-bg);stroke:var(--go)"/>
+<text x="36" y="594" class="lbl" style="fill:var(--go)">Google Calendar — it has a time</text>
+<text x="36" y="614" class="bd">I-3 · the model may never invent a date. No time in the</text>
+<text x="36" y="631" class="bd">source means it becomes a reminder, not an event.</text>
+
+<rect x="486" y="570" width="440" height="72" class="box" style="fill:var(--go-bg);stroke:var(--go)"/>
+<text x="502" y="594" class="lbl" style="fill:var(--go)">Reminders list — it doesn't</text>
+<text x="502" y="614" class="bd">I-9 · every push carries an idempotency key, so a re-run</text>
+<text x="502" y="631" class="bd">cannot duplicate and an undo can always find its target.</text>
+
+<rect x="946" y="412" width="214" height="230" class="box"/>
+<text x="960" y="436" class="hd">RUNTIME</text>
+<text x="960" y="460" class="bd">Node + SQLite</text>
+<text x="960" y="478" class="bd">on the Mac mini</text>
+<text x="960" y="496" class="bd">behind Tailscale</text>
+<text x="960" y="522" class="tn">No hosted deploy. No cloud copy</text>
+<text x="960" y="537" class="tn">of your data. The repo holds code</text>
+<text x="960" y="552" class="tn">and synthetic fixtures — never a</text>
+<text x="960" y="567" class="tn">real message, never a real person.</text>
+<line x1="960" y1="582" x2="1146" y2="582" stroke="var(--rule)"/>
+<text x="960" y="602" class="hd">SEVEN TABLES</text>
+<text x="960" y="622" class="mono">members · connections · items</text>
+<text x="960" y="637" class="mono">decisions · rules · pushes · patterns</text>
+
+<line x1="20" y1="664" x2="1160" y2="664" stroke="var(--rule)"/>
+<text x="20" y="686" class="bd">Finance proposes <tspan class="lbl">patterns, never transactions</tspan> — minimum three occurrences with a recognisable cadence (I-8). Get that wrong and you have built a second inbox with 400 items in it.</text>
+</svg>
+
+<div class="legend">
+<span><i class="sw" style="background:var(--learn)"></i><b>The learning loop</b> — where policy is written</span>
+<span><i class="sw" style="background:var(--accent)"></i><b>The human gate</b> — nothing leaves undecided</span>
+<span><i class="sw" style="background:var(--warn)"></i><b>The model</b> — drafts one object, decides nothing</span>
+<span><i class="sw" style="background:var(--go)"></i><b>Written out</b> — idempotent, undoable</span>
+<span><i class="sw" style="background:var(--halt)"></i><b>Refusal</b> — an invariant with a test behind it</span>
+</div>
+
+<h2>One mechanism, two moments</h2>
+<blockquote>The New Connection Wizard is zeroing run against the past.<br>Zeroing is the wizard run against the present.</blockquote>
+<p>Same grouping component, same four dispositions, same <code>rules</code> table, two entry points. This is invariant I-6, and it is the highest-leverage constraint in the repo — building two grouping UIs or a second policy store produces two things that drift apart and a user who cannot predict either one.</p>
+
+<h2>The extraction contract — the entire AI surface</h2>
+<pre>{
+  "kind":  "calendar" | "reminder" | "file" | "drop",
+  "title": "Flight DL2411 to Vancouver",
+  "when":  "2026-08-28T06:15:00-04:00",
+  "list":  "Personal",
+  "why":   "Delta confirmation with a departure time",
+  "sure":  true
+}</pre>
+<p>One call, one object per item. Anything else and the item goes to triage undrafted — which is exactly what you do today, so the floor is "no worse than manual." Model-side learning from your dispositions is explicitly rejected: it produces behaviour you cannot name, audit, or revert. Learning happens by writing a rule you can see and switch off.</p>
+
+<h2>The nine invariants</h2>
+<p>Each has a test that fails when it is violated, written before the code that satisfies it. If a change makes one fail, the change is wrong — not the test.</p>
+<table>
+<tr><th>#</th><th>Invariant</th></tr>
+<tr><td>I-1</td><td>An item disposed of once never requires the same decision twice. A re-arriving external id matches its prior disposition.</td></tr>
+<tr><td>I-2</td><td>A connection with no <code>wizard_completed_at</code> may not produce items. Policy exists before volume.</td></tr>
+<tr><td>I-3</td><td>The model may never invent a date. No time in the source means <code>when</code> is null and it cannot be a calendar entry.</td></tr>
+<tr><td>I-4</td><td><code>decisions</code> is append-only. No update, no delete, ever, including in migrations.</td></tr>
+<tr><td>I-5</td><td>Every automatic disposal is logged with its rule id and is undoable. Silent suppression is rejected.</td></tr>
+<tr><td>I-6</td><td>Wizard and zeroing write to the same <code>rules</code> table. A second policy store is rejected.</td></tr>
+<tr><td>I-7</td><td>A member may not read another member's items. Destinations are shared; inboxes are not.</td></tr>
+<tr><td>I-8</td><td>Finance proposes patterns, never transactions. Minimum three occurrences with a recognisable cadence.</td></tr>
+<tr><td>I-9</td><td>A push carries an idempotency key. A re-run cannot duplicate; an undo can always find its target.</td></tr>
+</table>
+
+<h2>What is deliberately not built</h2>
+<p>Knowledge graph engine · context engine · People directory · confidence classes · readiness states · source accounting · Comms surface · Scoreboard · observation mode as a separate mode · cross-member browsing · a forwarding inbox. Each was considered and rejected for a reason recorded in <code>CONFLICTS-RESOLVED.md</code> or <code>docs/PRESENTATION.html</code>. Read those before proposing one — it is probably in there with an argument attached.</p>
+
+</main></body></html>
