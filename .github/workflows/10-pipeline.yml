@@ -137,16 +137,17 @@ jobs:
           ISSUE_URL: ${{ github.event.issue.html_url }}
         run: |
           mkdir -p .harness
-          node -e '
-            const fs = require("node:fs");
-            fs.writeFileSync(".harness/request.json", JSON.stringify({
-              number: Number(process.env.ISSUE_NUMBER),
-              title: process.env.ISSUE_TITLE ?? "",
-              body: process.env.ISSUE_BODY ?? "",
-              labels: JSON.parse(process.env.ISSUE_LABELS || "[]"),
-              url: process.env.ISSUE_URL ?? "",
-            }, null, 2) + "\n");
-          '
+          # jq rather than `node -e`: once P1 writes package.json it may carry
+          # "type": "module", and a require() in an --eval would start failing
+          # here for a reason that has nothing to do with the issue.
+          jq -n \
+            --arg  number "$ISSUE_NUMBER" \
+            --arg  title  "$ISSUE_TITLE" \
+            --arg  body   "$ISSUE_BODY" \
+            --argjson labels "$ISSUE_LABELS" \
+            --arg  url    "$ISSUE_URL" \
+            '{number: ($number|tonumber), title: $title, body: $body, labels: $labels, url: $url}' \
+            > .harness/request.json
           cat .harness/request.json
 
       - name: Branch
@@ -317,9 +318,13 @@ jobs:
 
       - name: Round 3 — verdict only, judging the last repair
         id: round3
+        # Only when a repair happened and nothing has judged it yet. A round 2
+        # that reviewed clean already did that job, and paying for a third
+        # review to agree with it is money for nothing.
         if: >-
           steps.round1.outputs.verdict == 'fail' &&
-          fromJSON(steps.cfg.outputs.max_repair_attempts) >= 1
+          fromJSON(steps.cfg.outputs.max_repair_attempts) >= 1 &&
+          steps.round2.outputs.verdict != 'pass'
         uses: ./.github/actions/review-round
         with:
           round: "3"
@@ -363,7 +368,7 @@ jobs:
       - name: Classify the lane
         id: lane
         run: |
-          git fetch origin main --depth=1 || git fetch origin main
+          git fetch origin main
           git diff --name-only origin/main...HEAD > /tmp/changed.txt
           echo "changed paths:"; cat /tmp/changed.txt
           node scripts/lane-classify.mjs /tmp/changed.txt

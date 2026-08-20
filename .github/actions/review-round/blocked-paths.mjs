@@ -16,14 +16,25 @@ const { classify } = await import(pathToFileURL(path.join(root, "scripts/lane-cl
 const cfg = loadConfig(path.join(root, "harness.toml"));
 const wide = { ...cfg, autonomy: { ...cfg.autonomy, mode: "wide" } };
 
-// -z keeps paths with spaces or quotes intact; the porcelain status line is
-// "XY <path>", so the first three characters are the status, not the name.
-const raw = execSync("git status --porcelain -z", { cwd: root, encoding: "utf8" });
-const changed = raw
-  .split("\0")
-  .filter(Boolean)
-  .map((entry) => entry.slice(3))
-  .filter(Boolean);
+// Two lists rather than `git status`, and both NUL-separated:
+//
+//   * `git status --porcelain` collapses a new directory to `db/`, so a
+//     migration written into a directory that did not exist would never match
+//     `**/migrations/**` and would sail into the commit. `ls-files --others`
+//     names every untracked file individually.
+//   * a rename entry in porcelain output carries two paths in one record,
+//     which a naive parse turns into a garbage path.
+function paths(cmd) {
+  return execSync(cmd, { cwd: root, encoding: "utf8", maxBuffer: 32 * 1024 * 1024 })
+    .split("\0")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+const changed = [
+  ...paths("git diff --name-only -z HEAD"),
+  ...paths("git ls-files --others --exclude-standard -z"),
+];
 
 const blocked = changed.filter((p) => {
   const r = classify([p], wide);

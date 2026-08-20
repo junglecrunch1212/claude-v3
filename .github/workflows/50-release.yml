@@ -128,7 +128,7 @@ jobs:
             echo
             echo "### Deploy"
             echo
-            echo "Target is \`$DEPLOY_HOST\` — nothing deploys on its own. On the mini:"
+            echo "Deploy target is \`$DEPLOY_HOST\`: the Mac mini, and nothing reaches it on its own. On the mini:"
             echo
             echo '```'
             echo "git pull && npm ci && npm run build && npm run start"
