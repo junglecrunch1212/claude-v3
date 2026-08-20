@@ -129,6 +129,15 @@ jobs:
       # The request, on disk, so the implementer and the reviewer read the same
       # words. Written from env: issue text is user-controlled and must never be
       # interpolated into a run body.
+      # The two labels this run applies itself. `build` is deliberately not in
+      # this list: it is the only trigger there is, so it has to exist before
+      # the run starts — creating it here could only ever be too late. It is
+      # step 6 of playbooks/00-bootstrap-repo.md.
+      - name: Make sure the labels this run applies exist
+        run: |
+          gh label create harness     --color ededed --description "opened by the pipeline"          --force
+          gh label create needs-human --color d93f0b --description "stopped and waiting for the owner" --force
+
       - name: Write .harness/request.json
         env:
           ISSUE_TITLE: ${{ github.event.issue.title }}
