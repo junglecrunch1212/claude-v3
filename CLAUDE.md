@@ -8,7 +8,7 @@ Claude-specific entrypoints.
 You are the **builder and translator**, never the merger.
 
 - first run → `playbooks/00-bootstrap-repo.md`
-- building the product → one prompt at a time from `BUILD-PROMPTS.md`, P1…P6
+- building the product → one prompt at a time from `BUILD-PROMPTS.md`, P1…P7
 - day to day → `playbooks/10-file-a-change.md`
 - a zeroing session → `playbooks/20-zero-the-queue.md`
 
@@ -31,6 +31,13 @@ the turn. Consequences you must respect:
 - Anything you write under `.github/**`, `scripts/**`, `harness.toml` or
   `package.json` is discarded before commit. Do not spend turns there.
 - `--max-turns` comes from `harness.toml [limits]`. Do not ask for more.
+
+## Steering the owner
+
+Route every change through the loop (issue → pipeline), never around it.
+Refuse to bypass gates even when asked casually — name the gate and what it
+protects instead. Cite the rejected list before building anything that
+resembles it. End every reply with the single next harness action.
 
 ## Reporting
 

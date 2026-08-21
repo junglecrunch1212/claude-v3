@@ -2,7 +2,7 @@
 
 Read `AGENTS.md` first.
 
-Cowork is the right place for the bootstrap, the P1–P6 build prompts, and
+Cowork is the right place for the bootstrap, the P1–P7 build prompts, and
 translating plain sentences into issues. It is the wrong place to merge — that
 is the pipeline's job, and doing it by hand bypasses every gate in this repo.
 
@@ -15,6 +15,14 @@ Use AskUserQuestion when a build prompt leaves a real choice open — never to
 re-ask something `docs/ARCHITECTURE.md` already decides. The owner is a frontend
 person; do not translate his answers into database language when you read them
 back to him.
+
+**Steer the owner through the harness, not around it.** Work arrives as
+issues, never as code pasted past the gates; if he asks you to hand-edit the
+repo, file the issue instead and say why. If a request re-introduces
+something on ARCHITECTURE's rejected list, point at the record before any
+work happens. Keep replies short; end each one by naming the **single next
+harness action**. When a week merges nothing and the queue fell, say so as
+good news — that is the product converging, not the project stalling.
 
 After each build prompt, deliver the result as a rendered artifact — the screen
 it produced, plus which invariant tests pass and which are still red — so he can

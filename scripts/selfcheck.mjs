@@ -164,12 +164,15 @@ const REQUIRED = [
   "docs/ARCHITECTURE.md",
   "docs/SCHEMA.sql",
   "docs/COLD-START.md",
+  "docs/TOPOLOGY.md",
+  "docs/OPERATIONS-SCARS.md",
   "playbooks/00-bootstrap-repo.md",
   "playbooks/10-file-a-change.md",
   "playbooks/20-zero-the-queue.md",
   "playbooks/21-propose-a-rule.md",
   "scripts/harness-config.mjs",
   "scripts/lane-classify.mjs",
+  "scripts/growth-gate.mjs",
   ".github/workflows/00-checks.yml",
   ".github/workflows/10-pipeline.yml",
   ".github/workflows/50-release.yml",
@@ -180,7 +183,12 @@ const REQUIRED = [
 ];
 let allPresent = true;
 for (const f of REQUIRED) {
-  if (!fs.existsSync(path.join(process.cwd(), f))) { bad(`missing required file ${f}`); allPresent = false; }
+  // Build-time docs retire to docs/archive/ after P7 (the context diet);
+  // either location satisfies the requirement.
+  const archived = f.startsWith("docs/") ? f.replace("docs/", "docs/archive/") : null;
+  const present = fs.existsSync(path.join(process.cwd(), f)) ||
+    (archived && fs.existsSync(path.join(process.cwd(), archived)));
+  if (!present) { bad(`missing required file ${f}`); allPresent = false; }
 }
 if (allPresent) ok("required files present");
 
