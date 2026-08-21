@@ -82,6 +82,18 @@ If the one attempt was a reword rather than a fix, the finding was probably too
 vague to act on. Look at `.harness/verdict.json`: a finding without a specific
 `file` and `fix` produces exactly this.
 
+## Every PR is coming back needs-human / the loop "stopped approving"
+
+That is a stop, not a failure — read which gate said stop; it names its rule.
+If the deterministic checks are the blocker, the code is wrong, not the gate.
+If you genuinely need to keep moving, step DOWN the ladder, never around it:
+
+1. full loop → 2. `mode = "shadow"` (loop runs, you merge by hand) →
+3. chat agent + hand-merged PRs → 4. local edits.
+
+Every rung keeps `npm run ci` as the floor. The ladder has no rung where the
+tests stop running, and any rung is a fine place to live for a while.
+
 ## A run is stuck
 
 Cancel it in the Actions tab. Then delete the orphaned `agent/issue-*` branch

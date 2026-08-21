@@ -22,6 +22,10 @@ The rest, in the order you are likely to want them:
 | `docs/HARNESS-ARCHITECTURE.html` | the pipeline as one picture |
 | `docs/PRESENTATION.html` | the full argument, with dashboard wireframes |
 | `docs/SCHEMA.sql` | the seven tables |
+| `docs/TEST-REPERTOIRE.md` | 42 scenarios proving every item type has a home |
+| `docs/TOPOLOGY.md` | which machine runs what, as whom — mini, bridge Macs, Tailscale identity, Keychain, launchd |
+| `docs/OPERATIONS-SCARS.md` | 18 traps V2 already paid for — cursor bootstrap, Keychain-under-launchd, TCC, backup, false zeros |
+| `docs/V2-PARITY.md` | feature-by-feature against the running V2, and the cutover plan |
 | `docs/AUTONOMY-LANES.md` | what merges without you, and why |
 | `docs/COST-CONTROLS.md` | every dial and what it costs |
 | `docs/GITHUB-CAPABILITIES.md` | which GitHub features are in, out, and why |
@@ -116,7 +120,20 @@ That is correct: there is nothing to check until P1.
 
 ---
 
-## Step 2 — build the runtime, P1 through P6
+## Why this outperforms V2 in week one
+
+V2 runs in observation mode: in its whole live history it has **never written
+one entry** to a calendar or a list. P1 writes on day one — a real email onto
+your real calendar — so the first afternoon already does the thing V2 never
+has. P4's wizard then collapses the 462-candidate backlog into rules, which
+V2 (462 candidates, 0 rules) structurally cannot do. After P7 the correct
+trajectory is *quiet*: this product converges — seven tables, four buttons,
+six screens, finished. A week where nothing merges and the queue fell is a
+good week. The repo enforces this itself: a growth gate goes red only when
+the codebase is over its size budget **and still growing** — deletions always
+pass, so it guards against bloat without ever locking you out.
+
+## Step 2 — build the runtime, P1 through P7
 
 Paste them one at a time from `BUILD-PROMPTS.md`. Read the PR. Merge before the
 next one. Each assumes the previous floor holds.
@@ -128,6 +145,7 @@ next one. Each assumes the previous floor holds.
   P4  the New Connection Wizard  ~30 min
   P5  connect everything         ~20 min + one zeroing session each
   P6  Plaid, Notes, Today        ~30 min
+  P7  reply debt · supersede     ~30 min
 ```
 
 **P1 has no AI in it at all.** You type the title and the date yourself. If the

@@ -1,0 +1,114 @@
+# The deterministic floor. No model runs here and nothing is spent.
+#
+# This workflow keeps running when HARNESS_ENABLED is false, on purpose: the
+# kill switch stops the agents, and you still want to know whether the code
+# compiles while you work out what went wrong.
+name: checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A newer push to the same branch makes the older run pointless.
+concurrency:
+  group: checks-${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # Full history: a growth gate compares the change against origin/main,
+          # and a shallow clone has no merge base to compare against.
+          fetch-depth: 0
+
+      # Probed before setup-node rather than after, because `cache: npm` errors
+      # out when there is no lockfile to hash — which is every run until P1
+      # commits one, including the first post-merge run of this workflow.
+      - name: Is there a lockfile to cache against?
+        id: lock
+        run: |
+          if [ -f package-lock.json ]; then
+            echo "cache=npm" >> "$GITHUB_OUTPUT"
+          else
+            echo "cache=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: ${{ steps.lock.outputs.cache }}
+
+      # The self-check runs the growth gate as its section 7, and the gate needs
+      # a base to measure the slope against. On a pull_request event the
+      # checkout leaves no guarantee of the origin/main remote-tracking ref, and
+      # without it the gate reports sizes while enforcing nothing — which reads
+      # in the log exactly like a gate that passed.
+      - name: Fetch the base the growth gate measures against
+        run: |
+          git fetch --no-tags origin main:refs/remotes/origin/main 2>/dev/null || \
+            echo "::warning title=growth gate::origin/main not fetchable — sizes will be reported without the slope rule enforced."
+
+      # The harness validates itself before it is trusted to validate anything
+      # else. Dependency-free, so it runs before `npm ci` and works on a repo
+      # that has no package.json at all.
+      - name: Harness self-check
+        run: node scripts/selfcheck.mjs
+
+      # Every workflow reads harness.toml rather than hardcoding behaviour.
+      - name: Read harness.toml
+        id: cfg
+        run: node scripts/harness-config.mjs
+
+      # Is there an application yet? The directory name comes from
+      # `[stack] app_dir`, never from a literal here — hardcoding `app` is how
+      # a scaffold into `web/` turns every check into a SKIP that passes while
+      # testing nothing.
+      - name: Application present?
+        id: probe
+        env:
+          APP_DIR: ${{ steps.cfg.outputs.app_dir }}
+        run: |
+          if [ -f package.json ] && [ -f package-lock.json ] && [ -d "$APP_DIR" ]; then
+            echo "app=true" >> "$GITHUB_OUTPUT"
+            echo "Application found in '$APP_DIR'."
+          else
+            echo "app=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=checks::SKIP — no application scaffolded yet. Nothing was tested, and that is correct until BUILD-PROMPTS.md P1 creates package.json and '$APP_DIR'."
+          fi
+
+      - name: Install
+        if: steps.probe.outputs.app == 'true'
+        run: npm ci
+
+      - name: Install Playwright browsers
+        if: steps.probe.outputs.app == 'true'
+        run: npx playwright install --with-deps chromium
+
+      # The seven script names are pinned in P1 and referenced here. `ci` is the
+      # only gate the pipeline has; it is not extended from this file.
+      - name: npm run ci
+        if: steps.probe.outputs.app == 'true'
+        run: npm run ci
+
+      # The visual review this project gets. Uploaded on always() so a failure
+      # hands you the screenshot of the failure, which is the one you want.
+      - name: Upload screenshots
+        if: always() && steps.probe.outputs.app == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-${{ github.run_id }}
+          path: |
+            test-results/
+            playwright-report/
+          if-no-files-found: ignore
+          retention-days: 14

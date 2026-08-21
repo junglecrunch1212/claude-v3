@@ -86,7 +86,9 @@ docs/ARCHITECTURE.md      what the product is. Source of truth
 docs/SCHEMA.sql           the seven tables: members connections items
                           decisions rules pushes patterns
 docs/COLD-START.md        the wizard + zeroing learning loop
-BUILD-PROMPTS.md          P0–P6, the scaffold sequence
+docs/TOPOLOGY.md          machines, identity, Keychain, launchd, bridge Macs
+docs/OPERATIONS-SCARS.md  V2's paid-for traps: S1–S18. P1/P2/P5/P6 cite these
+BUILD-PROMPTS.md          P0–P7, the scaffold sequence
 db/migrations/            SQL migrations (BLOCKED path — never edited in place)
 server/                   Express JSON API, binds to localhost
 adapters/                 Gmail, Outlook, iMessage, WhatsApp, Calendar,
@@ -106,6 +108,13 @@ Directories under `db/`, `server/`, `adapters/`, `policy/`, `app/` and `tests/`
 do not exist until P1 creates them. Before that, `00-checks.yml` reports
 `SKIP — no application scaffolded yet` and passes, which is correct.
 
+## Context diet
+
+Read your role's files from the table above and **nothing else**. The other
+docs are build-time references and archaeology; loading them burns the context
+this repo's small size exists to protect. After `stage = "operating"`,
+build-time docs live in `docs/archive/` — treat that directory as write-only.
+
 ## Working policy
 
 Proceed autonomously through reversible work when the request is clear. Stop and
@@ -116,6 +125,13 @@ hand.
 Before implementing, state in one sentence what you are about to change and
 which files. After implementing, run `npm run ci` and report evidence — not
 "done", but which checks ran and what they said.
+
+After `stage = "operating"`, the default answer to a new feature request is
+a question: **does a rule, not code, solve this?** Then: would a deletion?
+Only then: code. A quiet loop with a falling queue is this repo's success
+state — zero merges in a week is a good week. End every report by naming the
+**single next harness action** for the owner (an issue to file, a PR to look
+at, a zeroing session to run, or "nothing — the loop is quiet").
 
 State what you did **in the owner's vocabulary**. He describes screens and
 moments, not schemas. "Triage now groups waiting items from the same sender" is

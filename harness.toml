@@ -8,7 +8,7 @@ schema_version = 1
 stage = "bootstrap"
 
 project_name = "administrateme-v3"
-owner = "@OWNER"              # your GitHub username, with the @
+owner = "@junglecrunch1212"
 
 # ---------------------------------------------------------------------------
 # Which model does which job. Both vendor families ship; these flags pick.
@@ -47,6 +47,17 @@ blocked_paths = [
   "**/*secret*",
   "**/*credential*",
 ]
+
+# ---------------------------------------------------------------------------
+# The convergence budget. This product is FINISHED at ~7 tables, 4 buttons,
+# ~6 screens; growth past these numbers is how a repo exceeds what a fresh
+# agent context can reason about. The gate (scripts/growth-gate.mjs) goes red
+# only when the repo is over budget AND the change grows it — a deletion
+# always passes, so it can never lock the loop.
+# ---------------------------------------------------------------------------
+[budget]
+max_app_loc   = 12000
+max_doc_files = 15
 
 [limits]
 max_turns_implement = 30

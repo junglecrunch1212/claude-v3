@@ -8,12 +8,19 @@ PRAGMA foreign_keys = ON;
 -- Privacy boundary lives here. Your inboxes federate into your queue;
 -- Laura's into hers. Members share destinations, never inboxes.
 CREATE TABLE members (
-  id          TEXT PRIMARY KEY,
-  name        TEXT NOT NULL,
-  role        TEXT NOT NULL DEFAULT 'member'
+  id              TEXT PRIMARY KEY,
+  name            TEXT NOT NULL,
+  role            TEXT NOT NULL DEFAULT 'member',
+  tailscale_login TEXT UNIQUE            -- identity: `tailscale serve` injects
+                                         -- Tailscale-User-Login; this maps it
+                                         -- to a member. Unmapped login = 403.
 );
 
 -- One row per inbox, per member. The wizard runs once per row.
+-- Every member also gets one provider='manual' pseudo-connection ("+ Add"),
+-- created with wizard_completed_at set — I-2 holds trivially: you are the
+-- policy. `sent_scope` opts a mail connection into the reply-debt detector,
+-- which needs to see whether a reply of yours exists. Behaviour, not content.
 CREATE TABLE connections (
   id                    TEXT PRIMARY KEY,
   member_id             TEXT NOT NULL REFERENCES members(id),
@@ -21,10 +28,15 @@ CREATE TABLE connections (
   label                 TEXT NOT NULL,
   scope                 TEXT,            -- labels, folders, or conversation ids
   read_only             INTEGER NOT NULL DEFAULT 1,
+  sent_scope            INTEGER NOT NULL DEFAULT 0,
   connected_at          TEXT NOT NULL,
   wizard_completed_at   TEXT,            -- NULL = no policy yet; see I-2
   policy_coverage_pct   REAL,
-  last_synced_at        TEXT
+  last_synced_at        TEXT,
+  last_sync_stats       TEXT             -- JSON {fetched,items,quarantined,
+                                         -- failed} per run. The false-zero
+                                         -- guard: quiet queue vs dead adapter
+                                         -- are different claims (S7)
 );
 
 -- One row per thing, from any connection.
@@ -35,10 +47,20 @@ CREATE TABLE items (
   sender         TEXT,
   subject        TEXT,
   body           TEXT,
-  received_at    TEXT NOT NULL,
+  received_at    TEXT NOT NULL,          -- PROVIDER time. Never substituted
+                                         -- with now() — a missing provider
+                                         -- time quarantines the record (S6)
+  ingested_at    TEXT NOT NULL,          -- our time. Shown beside received_at
+                                         -- in triage when they differ (backfill)
   status         TEXT NOT NULL,          -- new | proposed | done | dropped | auto
   proposal_json  TEXT,                   -- the extraction contract, or NULL
-  duplicate_of   TEXT REFERENCES items(id),
+  duplicate_of   TEXT REFERENCES items(id),  -- Gate 3: 2nd arrival of the same
+                                             -- thing, auto-disposed, linked
+  parent_item_id TEXT REFERENCES items(id),  -- split: one arrival held several
+                                             -- obligations; children carry them
+  supersedes_item_id TEXT REFERENCES items(id), -- same thread, changed details:
+                                             -- reschedule / cancellation. The
+                                             -- card offers update-the-push
   UNIQUE (connection_id, external_id)    -- re-syncing cannot create doubles
 );
 CREATE INDEX items_queue  ON items (status, received_at);
@@ -51,6 +73,9 @@ CREATE TABLE decisions (
   id          TEXT PRIMARY KEY,
   item_id     TEXT NOT NULL REFERENCES items(id),
   action      TEXT NOT NULL,             -- calendar | reminder | file | drop
+                                         -- plus two structural actions the
+                                         -- four buttons imply: split (parent
+                                         -- of G1 children) and undo
   target      TEXT,                      -- which calendar, which list
   decided_at  TEXT NOT NULL,
   decided_by  TEXT NOT NULL              -- member id, "rule:<id>", or "wizard:<connection_id>"
@@ -92,7 +117,14 @@ CREATE TABLE pushes (
   item_id      TEXT NOT NULL REFERENCES items(id),
   provider     TEXT NOT NULL,            -- google_calendar | google_tasks | apple_reminders
   provider_id  TEXT NOT NULL,
-  idempotency  TEXT NOT NULL UNIQUE,     -- item_id + provider; a re-run cannot duplicate
+  repeat       TEXT,                     -- RRULE or NULL. The PROVIDER executes
+                                         -- recurrence; this records what was
+                                         -- asked for, so undo can find it
+  idempotency  TEXT NOT NULL UNIQUE,     -- item_id + provider + payload hash.
+                                         -- One item may push several things
+                                         -- (14 ICS games, event + lead-time
+                                         -- reminder); a re-run of the SAME
+                                         -- payload cannot duplicate
   pushed_at    TEXT NOT NULL,
   undone_at    TEXT
 );

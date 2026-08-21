@@ -1,0 +1,222 @@
+name: review-round
+description: >
+  One check → review → repair cycle. The reviewer never fixes and the repairer
+  never reviews: they are separate contexts on purpose, because a context that
+  wrote the code can only agree with itself.
+
+inputs:
+  round:
+    description: Which round this is, for the log and the PR comment.
+    required: true
+  repair:
+    description: >
+      Whether a failing verdict may be repaired in this round. The final round
+      passes false, so the last repair is judged rather than trusted.
+    required: true
+  reviewer:
+    description: claude | codex | off
+    required: true
+  repairer:
+    description: claude | codex | off
+    required: true
+  max_turns_review:
+    required: true
+  max_turns_repair:
+    required: true
+  app_present:
+    description: Whether package.json and the app dir exist yet.
+    required: true
+  anthropic_api_key:
+    required: false
+    default: ""
+  claude_code_oauth_token:
+    required: false
+    default: ""
+  openai_api_key:
+    required: false
+    default: ""
+  github_token:
+    required: true
+
+outputs:
+  verdict:
+    description: pass | fail
+    value: ${{ steps.read-verdict.outputs.verdict }}
+  check_status:
+    description: pass | fail | skip
+    value: ${{ steps.checks.outputs.status }}
+  summary:
+    description: The reviewer's one-line summary.
+    value: ${{ steps.read-verdict.outputs.summary }}
+
+runs:
+  using: composite
+  steps:
+    # ---------------------------------------------------------------------
+    # Deterministic first. A model verdict on something tsc could have
+    # answered is wasted money and weaker evidence.
+    # ---------------------------------------------------------------------
+    - name: Deterministic checks
+      id: checks
+      shell: bash
+      env:
+        APP_PRESENT: ${{ inputs.app_present }}
+      run: |
+        mkdir -p .harness
+        if [ "$APP_PRESENT" != "true" ]; then
+          echo "SKIP — no application scaffolded yet, so npm run ci has nothing to gate." > /tmp/checks-tail.txt
+          echo "status=skip" >> "$GITHUB_OUTPUT"
+          cat /tmp/checks-tail.txt
+          exit 0
+        fi
+        set +e
+        npm run ci > /tmp/checks-full.txt 2>&1
+        code=$?
+        set -e
+        # The reviewer reads the tail, not the whole log: the failure is at the
+        # end and the head is npm noise.
+        tail -c 20000 /tmp/checks-full.txt > /tmp/checks-tail.txt
+        cat /tmp/checks-tail.txt
+        if [ $code -eq 0 ]; then
+          echo "status=pass" >> "$GITHUB_OUTPUT"
+        else
+          echo "status=fail" >> "$GITHUB_OUTPUT"
+        fi
+
+    # A stale verdict from the previous round must not be read as this round's.
+    - name: Clear the previous verdict
+      shell: bash
+      run: rm -f .harness/verdict.json
+
+    - name: Review (claude)
+      if: inputs.reviewer == 'claude'
+      uses: anthropics/claude-code-action@v1
+      with:
+        anthropic_api_key: ${{ inputs.anthropic_api_key }}
+        claude_code_oauth_token: ${{ inputs.claude_code_oauth_token }}
+        github_token: ${{ inputs.github_token }}
+        claude_args: --max-turns ${{ inputs.max_turns_review }} --allowedTools "Read,Glob,Grep,Bash,Write"
+        prompt: |
+          You are the reviewer described in playbooks/06-review-change.md.
+          Read AGENTS.md, harness.toml and that playbook, then review the
+          working tree against .harness/request.json.
+
+          The deterministic checks have already run. Their tail is at
+          /tmp/checks-tail.txt — read it before forming any opinion. If they
+          failed, the verdict is "fail" and your findings must say what failed
+          in terms the repairer can act on.
+
+          You are read-only. The only file you may write is
+          .harness/verdict.json, and you must write it before you finish, in
+          exactly the shape the playbook specifies. Do not fix anything. Do not
+          commit or push.
+
+    # Unverified: the pinned action and its input names have never been run
+    # here. Worth one throwaway run before you switch reviewer to "codex".
+    - name: Review (codex)
+      if: inputs.reviewer == 'codex'
+      uses: openai/codex-action@main
+      with:
+        openai-api-key: ${{ inputs.openai_api_key }}
+        prompt: |
+          You are the reviewer described in playbooks/06-review-change.md.
+          Read AGENTS.md, harness.toml and that playbook, then review the
+          working tree against .harness/request.json. The check tail is at
+          /tmp/checks-tail.txt; read it first. Write .harness/verdict.json in
+          exactly the shape the playbook specifies and change nothing else.
+
+    # ---------------------------------------------------------------------
+    # A missing or unparseable verdict is read as fail. Red checks override a
+    # pass — never talk a failing compiler out of its result.
+    # ---------------------------------------------------------------------
+    - name: Read the verdict
+      id: read-verdict
+      shell: bash
+      env:
+        REVIEWER: ${{ inputs.reviewer }}
+        CHECK_STATUS: ${{ steps.checks.outputs.status }}
+      run: |
+        echo "--- round ${{ inputs.round }} ---"
+        cat .harness/verdict.json 2>/dev/null || echo "(the reviewer wrote no verdict file)"
+        node "$GITHUB_WORKSPACE/.github/actions/review-round/read-verdict.mjs"
+
+    - name: Repair (claude)
+      if: >-
+        inputs.repair == 'true' &&
+        inputs.repairer == 'claude' &&
+        steps.read-verdict.outputs.verdict == 'fail'
+      uses: anthropics/claude-code-action@v1
+      with:
+        anthropic_api_key: ${{ inputs.anthropic_api_key }}
+        claude_code_oauth_token: ${{ inputs.claude_code_oauth_token }}
+        github_token: ${{ inputs.github_token }}
+        claude_args: --max-turns ${{ inputs.max_turns_repair }} --allowedTools "Read,Edit,Write,Glob,Grep,Bash"
+        prompt: |
+          You are the repairer described in playbooks/07-repair-change.md.
+          Read that playbook, then read .harness/verdict.json and
+          /tmp/checks-tail.txt.
+
+          Fix every P1. Fix a P2 only where the fix is contained and obviously
+          right. Ignore P3s. Touch no file a finding does not name.
+
+          Never weaken a check to make it pass — no deleted test, no .skip, no
+          loosened assertion, no `any`, no eslint-disable, no swallowed error.
+          If a check is genuinely wrong, that is a finding: write
+          .harness/repair-note.md and change nothing.
+
+          This is your only attempt. Do not commit or push — the workflow
+          commits after you. Anything you write under .github/, scripts/,
+          harness.toml or package.json is reverted before the commit, so do not
+          spend turns there.
+
+    - name: Repair (codex)
+      if: >-
+        inputs.repair == 'true' &&
+        inputs.repairer == 'codex' &&
+        steps.read-verdict.outputs.verdict == 'fail'
+      uses: openai/codex-action@main
+      with:
+        openai-api-key: ${{ inputs.openai_api_key }}
+        prompt: |
+          You are the repairer described in playbooks/07-repair-change.md. Read
+          it, then .harness/verdict.json and /tmp/checks-tail.txt. Fix every P1
+          and nothing else. Never weaken a check. Do not commit or push.
+
+    # ---------------------------------------------------------------------
+    # The loop does not edit the loop. Enforced here rather than trusted: the
+    # revert is per path, because one untracked file would abort a single
+    # `git checkout` over the whole list and leave every other edit in place.
+    # ---------------------------------------------------------------------
+    - name: Revert any edit to a blocked path
+      if: inputs.repair == 'true'
+      shell: bash
+      run: |
+        node "$GITHUB_WORKSPACE/.github/actions/review-round/blocked-paths.mjs" > /tmp/blocked.txt || true
+        if [ -s /tmp/blocked.txt ]; then
+          echo "::warning title=blocked paths::The repairer edited protected paths. Reverting them."
+          while IFS= read -r p; do
+            [ -z "$p" ] && continue
+            echo "  reverting $p"
+            if git cat-file -e "HEAD:$p" 2>/dev/null; then
+              git checkout HEAD -- "$p" || true
+            else
+              rm -f "$p" || true
+            fi
+          done < /tmp/blocked.txt
+        fi
+
+    - name: Commit the repair
+      if: inputs.repair == 'true' && steps.read-verdict.outputs.verdict == 'fail'
+      shell: bash
+      env:
+        ROUND: ${{ inputs.round }}
+      run: |
+        git config user.name  "administrateme-harness"
+        git config user.email "harness@users.noreply.github.com"
+        git add -A -- ':!.harness'
+        if git diff --cached --quiet; then
+          echo "::notice title=repair::The repairer changed nothing. Its note, if any, is in the PR body."
+        else
+          git commit -m "repair: round ${ROUND}"
+          git push
+        fi
