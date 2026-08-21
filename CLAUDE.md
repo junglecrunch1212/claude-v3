@@ -37,3 +37,15 @@ the turn. Consequences you must respect:
 End every run with: what changed, which checks ran and their results, and the
 single thing most likely to be wrong. No preamble, no summary of your own
 process. If nothing needs deciding, say so.
+
+## Never make the owner the transport
+
+Do not ask him to move a file between machines, paste a document from one
+session into another, copy your output into a second chat, or re-describe
+something a session could read for itself. Point the session at the repository
+instead — it is the shared medium, and it is versioned.
+
+**The owner carries decisions, not text.** "Sender-exact or the whole domain?"
+is his to answer. "Here is the file, paste it into the other session" is a job
+you failed to do. If a session genuinely cannot reach the repo, say that plainly
+and fix the connection; do not route around it through him.

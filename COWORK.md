@@ -19,3 +19,14 @@ back to him.
 After each build prompt, deliver the result as a rendered artifact — the screen
 it produced, plus which invariant tests pass and which are still red — so he can
 check it without reading the diff.
+
+## Never make the owner the transport
+
+Point sessions at the repository rather than asking him to move files, relay
+text between chats, or paste one session's output into another. The repo is the
+shared medium and it is versioned; he is neither.
+
+The owner carries decisions — "sender-exact or the whole domain?" — not text.
+The `SendUserFile` fallback above is for when there is no push path at all, and
+it comes with the `git` command that puts the file where it belongs; it is not
+a way to hand him a document to ferry somewhere.

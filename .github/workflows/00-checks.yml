@@ -26,10 +26,27 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
+        with:
+          # Full history: a growth gate compares the change against origin/main,
+          # and a shallow clone has no merge base to compare against.
+          fetch-depth: 0
+
+      # Probed before setup-node rather than after, because `cache: npm` errors
+      # out when there is no lockfile to hash — which is every run until P1
+      # commits one, including the first post-merge run of this workflow.
+      - name: Is there a lockfile to cache against?
+        id: lock
+        run: |
+          if [ -f package-lock.json ]; then
+            echo "cache=npm" >> "$GITHUB_OUTPUT"
+          else
+            echo "cache=" >> "$GITHUB_OUTPUT"
+          fi
 
       - uses: actions/setup-node@v5
         with:
           node-version: 22
+          cache: ${{ steps.lock.outputs.cache }}
 
       # The harness validates itself before it is trusted to validate anything
       # else. Dependency-free, so it runs before `npm ci` and works on a repo
