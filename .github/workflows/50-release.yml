@@ -128,10 +128,10 @@ jobs:
             echo
             echo "### Deploy"
             echo
-            echo "Deploy target is \`$DEPLOY_HOST\`: the Mac mini, and nothing reaches it on its own. On the mini:"
+            echo "Deploy target is \`$DEPLOY_HOST\`: the Mac mini, and nothing reaches it on its own — deploy stays pull-based. On the mini (\`docs/TOPOLOGY.md\`); a red doctor means do not restart onto it:"
             echo
             echo '```'
-            echo "git pull && npm ci && npm run build && npm run start"
+            echo "git pull && npm ci && npm run build && npm run doctor && launchctl kickstart -k gui/\$(id -u)/com.administrateme.server"
             echo '```'
           } > /tmp/notes.md
 

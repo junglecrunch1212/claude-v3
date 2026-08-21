@@ -408,10 +408,10 @@ jobs:
             {
               echo "Built and merged. [Run]($RUN_URL) · PR #$PR_NUMBER."
               echo
-              echo "Pull it on the mini when you want it:"
+              echo "Pull it on the mini when you want it — a red doctor means do not restart onto it (\`docs/TOPOLOGY.md\`):"
               echo
               echo '```'
-              echo "git pull && npm ci && npm run build && npm run start"
+              echo "git pull && npm ci && npm run build && npm run doctor && launchctl kickstart -k gui/\$(id -u)/com.administrateme.server"
               echo '```'
             } > /tmp/issue-body.md
             gh issue comment "$ISSUE_NUMBER" --body-file /tmp/issue-body.md
