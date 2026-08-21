@@ -192,6 +192,19 @@ for (const f of REQUIRED) {
 }
 if (allPresent) ok("required files present");
 
+// --- 7. The convergence budget ----------------------------------------------
+// Run the growth gate from here rather than as a separate workflow step, so
+// wiring it cannot be forgotten: every caller of the self-check gets it. It
+// exits 0 when no origin/main base exists (fresh repo, shallow clone), and
+// fails only over-budget-AND-growing — a shrinking change always passes.
+try {
+  const { execFileSync } = await import("node:child_process");
+  execFileSync(process.execPath, [path.join(process.cwd(), "scripts/growth-gate.mjs")], { stdio: "inherit" });
+  ok("growth gate");
+} catch {
+  bad("growth gate failed — over budget and growing. See harness.toml [budget].");
+}
+
 console.log("");
 if (problems.length) {
   console.log(`${problems.length} problem(s). The harness will not behave as documented until these are fixed.`);
