@@ -48,24 +48,21 @@ jobs:
           node-version: 22
           cache: ${{ steps.lock.outputs.cache }}
 
+      # The self-check runs the growth gate as its section 7, and the gate needs
+      # a base to measure the slope against. On a pull_request event the
+      # checkout leaves no guarantee of the origin/main remote-tracking ref, and
+      # without it the gate reports sizes while enforcing nothing — which reads
+      # in the log exactly like a gate that passed.
+      - name: Fetch the base the growth gate measures against
+        run: |
+          git fetch --no-tags origin main:refs/remotes/origin/main 2>/dev/null || \
+            echo "::warning title=growth gate::origin/main not fetchable — sizes will be reported without the slope rule enforced."
+
       # The harness validates itself before it is trusted to validate anything
       # else. Dependency-free, so it runs before `npm ci` and works on a repo
       # that has no package.json at all.
       - name: Harness self-check
         run: node scripts/selfcheck.mjs
-
-      # This product converges: past-budget growth is how a repo outgrows what a
-      # fresh agent context can hold. The gate only ever refuses to make an
-      # oversized thing bigger — a shrinking change always passes.
-      #
-      # origin/main is fetched explicitly: on a pull_request event the checkout
-      # leaves no guarantee of that remote-tracking ref, and without it the gate
-      # silently degrades to report-only, which looks identical to enforcing.
-      - name: Growth gate
-        run: |
-          git fetch --no-tags origin main:refs/remotes/origin/main 2>/dev/null || \
-            echo "::warning title=growth gate::origin/main not fetchable — reporting sizes without enforcing the slope rule."
-          node scripts/growth-gate.mjs
 
       # Every workflow reads harness.toml rather than hardcoding behaviour.
       - name: Read harness.toml
