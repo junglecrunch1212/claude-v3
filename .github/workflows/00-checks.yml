@@ -54,6 +54,19 @@ jobs:
       - name: Harness self-check
         run: node scripts/selfcheck.mjs
 
+      # This product converges: past-budget growth is how a repo outgrows what a
+      # fresh agent context can hold. The gate only ever refuses to make an
+      # oversized thing bigger — a shrinking change always passes.
+      #
+      # origin/main is fetched explicitly: on a pull_request event the checkout
+      # leaves no guarantee of that remote-tracking ref, and without it the gate
+      # silently degrades to report-only, which looks identical to enforcing.
+      - name: Growth gate
+        run: |
+          git fetch --no-tags origin main:refs/remotes/origin/main 2>/dev/null || \
+            echo "::warning title=growth gate::origin/main not fetchable — reporting sizes without enforcing the slope rule."
+          node scripts/growth-gate.mjs
+
       # Every workflow reads harness.toml rather than hardcoding behaviour.
       - name: Read harness.toml
         id: cfg
